@@ -13,6 +13,7 @@ interface AuthContextType {
   inviteUser: (email: string, role: AppUser['role'], playerId?: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   updateUserStatus: (id: string, status: AppUser['status']) => Promise<void>;
+  updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string }) => Promise<void>;
   loading: boolean;
 }
 
@@ -327,10 +328,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateUserProfile = async (id: string, updates: { role?: AppUser['role'], playerId?: string }) => {
+    if (supabase) {
+      const updateData: any = {};
+      if (updates.role) updateData.role = updates.role;
+      if (updates.playerId !== undefined) updateData.player_id = updates.playerId; // Allow null to unlink
+
+      await supabase.from('profiles').update(updateData).eq('id', id);
+      
+      setUsers(prev => prev.map(u => (u.id === id ? { 
+          ...u, 
+          role: updates.role || u.role,
+          playerId: updates.playerId !== undefined ? updates.playerId : u.playerId
+      } : u)));
+      
+      // Update local user if it's me
+      if (user?.id === id) {
+          setUser(prev => prev ? {
+              ...prev,
+              role: updates.role || prev.role,
+              playerId: updates.playerId !== undefined ? updates.playerId : prev.playerId
+          } : null);
+      }
+    } else {
+       setUsers(prev => prev.map(u => (u.id === id ? { 
+          ...u, 
+          role: updates.role || u.role,
+          playerId: updates.playerId !== undefined ? updates.playerId : u.playerId
+      } : u)));
+    }
+  };
+
   const isAdmin = user?.role === 'admin';
  
   return (
-    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, loading }}>
       {children}
     </AuthContext.Provider>
   );

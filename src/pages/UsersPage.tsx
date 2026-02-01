@@ -1,24 +1,47 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Player } from '../types';
-import { UserPlus, Trash2, Shield, User } from 'lucide-react';
+import { UserPlus, Trash2, Shield, User, Edit2 } from 'lucide-react';
 import { AppUser } from '../types';
 
 export function UsersPage({ players }: { players: Player[] }) {
-  const { users, inviteUser, deleteUser, isAdmin, updateUserStatus } = useAuth();
+  const { users, inviteUser, deleteUser, isAdmin, updateUserStatus, updateUserProfile } = useAuth();
   const [isInviting, setIsInviting] = useState(false);
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null); // For editing existing users
+
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<AppUser['role']>('viewer');
   const [invitePlayerId, setInvitePlayerId] = useState<string | undefined>(undefined);
 
+  const startEdit = (user: AppUser) => {
+      setInviteEmail(user.email);
+      setInviteRole(user.role);
+      setInvitePlayerId(user.playerId);
+      setEditingUser(user);
+      setIsInviting(true);
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (inviteEmail.trim()) {
-      await inviteUser(inviteEmail, inviteRole, invitePlayerId);
-      setIsInviting(false);
-      setInviteEmail('');
-      setInvitePlayerId(undefined);
+    
+    if (editingUser) {
+        // Update existing user
+        await updateUserProfile(editingUser.id, {
+            role: inviteRole,
+            playerId: invitePlayerId
+        });
+    } else {
+        // Invite new user
+        if (inviteEmail.trim()) {
+            await inviteUser(inviteEmail, inviteRole, invitePlayerId);
+        }
     }
+    
+    setIsInviting(false);
+    setEditingUser(null);
+    setInviteEmail('');
+    setInvitePlayerId(undefined);
+    setInviteRole('viewer');
   };
 
   if (!isAdmin) {
@@ -30,7 +53,13 @@ export function UsersPage({ players }: { players: Player[] }) {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-900">User Management</h2>
         <button
-          onClick={() => setIsInviting(true)}
+          onClick={() => {
+              setEditingUser(null);
+              setInviteEmail('');
+              setInviteRole('viewer');
+              setInvitePlayerId(undefined);
+              setIsInviting(true);
+          }}
           className="bg-primary text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-teal-700 transition-colors"
         >
           <UserPlus className="w-5 h-5" /> Invite User
@@ -40,7 +69,9 @@ export function UsersPage({ players }: { players: Player[] }) {
       {isInviting && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">Invite New User</h3>
+            <h3 className="text-xl font-bold text-slate-800 mb-4">
+                {editingUser ? 'Edit User' : 'Invite New User'}
+            </h3>
             <form onSubmit={handleInvite} className="space-y-4">
               <div>
                 <label className="text-sm font-bold text-slate-700">Email Address</label>
@@ -51,6 +82,7 @@ export function UsersPage({ players }: { players: Player[] }) {
                   placeholder="user@example.com"
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mt-1 focus:ring-2 focus:ring-primary outline-none"
                   autoFocus
+                  disabled={!!editingUser} // Cannot change email of existing user
                 />
               </div>
               
@@ -100,7 +132,7 @@ export function UsersPage({ players }: { players: Player[] }) {
                   type="submit"
                   className="flex-1 py-3 text-white font-bold bg-primary rounded-xl hover:bg-teal-700"
                 >
-                  Send Invite
+                  {editingUser ? 'Save Changes' : 'Send Invite'}
                 </button>
               </div>
             </form>
@@ -158,6 +190,15 @@ export function UsersPage({ players }: { players: Player[] }) {
                         Activate
                       </button>
                     )}
+                    
+                    <button
+                        onClick={() => startEdit(user)}
+                        className="text-slate-400 hover:text-primary p-2 hover:bg-slate-50 rounded-lg transition-colors"
+                        title="Edit User"
+                    >
+                        <Edit2 className="w-4 h-4" />
+                    </button>
+
                     {user.role !== 'admin' && (
                       <button 
                           onClick={() => deleteUser(user.id)}
