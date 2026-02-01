@@ -402,7 +402,14 @@ function MainApp() {
 
   const handleAddPlayer = async (name: string, avatar?: string) => {
     if (supabase) {
-        const { data } = await supabase.from('players').insert([{ name, avatar }]).select().single();
+        const { data, error } = await supabase.from('players').insert([{ name, avatar }]).select().single();
+        
+        if (error) {
+            console.error('Error adding player:', error);
+            alert('Failed to add player: ' + error.message);
+            return;
+        }
+
         if (data) {
              const newPlayer: Player = {
                 id: data.id,
@@ -425,7 +432,14 @@ function MainApp() {
 
   const handleUpdatePlayer = async (id: string, name: string, avatar?: string) => {
     if (supabase) {
-        await supabase.from('players').update({ name, avatar }).eq('id', id);
+        const { error } = await supabase.from('players').update({ name, avatar }).eq('id', id);
+        
+        if (error) {
+            console.error('Error updating player:', error);
+            alert('Failed to update player: ' + error.message);
+            return;
+        }
+
         setPlayers(players.map(p => p.id === id ? { ...p, name, avatar } : p));
     } else {
         setPlayers(players.map(p => p.id === id ? { ...p, name, avatar } : p));
