@@ -52,6 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 status: profile.status,
                 playerId: profile.player_id
               });
+            } else {
+              // Fallback if profile is missing (e.g. trigger didn't run)
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.email?.split('@')[0] || 'User',
+                role: 'viewer',
+                status: 'active',
+                playerId: undefined
+              });
             }
           }
           
@@ -73,6 +83,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   status: profile.status,
                   playerId: profile.player_id
                 });
+              } else {
+                 // Fallback if profile is missing
+                 setUser({
+                   id: session.user.id,
+                   email: session.user.email || '',
+                   name: session.user.email?.split('@')[0] || 'User',
+                   role: 'viewer',
+                   status: 'active',
+                   playerId: undefined
+                 });
               }
             } else {
               // Check for local admin fallback when Supabase session is cleared/missing

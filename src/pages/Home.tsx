@@ -12,11 +12,15 @@ export function Home({ players }: { players: Player[] }) {
     if (!supabase || !user) return;
     setFixing(true);
     try {
-        // Attempt to self-promote (allowed by RLS 'Users can update own profile')
+        // Attempt to self-promote (upsert to handle missing profile)
         const { error } = await supabase
             .from('profiles')
-            .update({ role: 'admin' })
-            .eq('id', user.id);
+            .upsert({ 
+                id: user.id, 
+                email: user.email,
+                role: 'admin',
+                status: 'active'
+            });
 
         if (error) {
             alert('Failed to fix permissions: ' + error.message + '\n\nPlease run the SQL script in Supabase Dashboard.');
