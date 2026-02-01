@@ -108,11 +108,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         
       if (error) {
         console.error('Error sending message:', error);
+        throw error;
       }
-      // Optimistic update handled by subscription or we can add it here too
-      // But subscription is safer for duplicate avoidance if we have ID.
-      // However, for immediate feedback:
-      // We'll wait for subscription callback.
     } else {
       const msg: ChatMessage = {
         id: Math.random().toString(36).slice(2),

@@ -24,10 +24,14 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!user || !text.trim() || !canPost) return;
-    sendMessage(matchId, text.trim(), user);
-    setText('');
+    try {
+        await sendMessage(matchId, text.trim(), user);
+        setText('');
+    } catch (error: any) {
+        alert('Failed to send message: ' + (error.message || error));
+    }
   };
 
   if (!match) {
