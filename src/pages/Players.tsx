@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 
 interface PlayersPageProps {
   players: Player[];
-  onAddPlayer: (name: string, avatar?: string) => void;
+  onAddPlayer: (name: string, avatar?: string, email?: string) => void;
   onUpdatePlayer: (id: string, name: string, avatar?: string) => void;
 }
 
@@ -13,17 +13,20 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPag
   const { isAdmin } = useAuth();
   const [isEditing, setIsEditing] = useState<string | null>(null); // 'new' or player ID
   const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const startNew = () => {
     setEditName('');
+    setEditEmail('');
     setEditAvatar(undefined);
     setIsEditing('new');
   };
 
   const startEdit = (player: Player) => {
     setEditName(player.name);
+    setEditEmail(''); // Don't allow editing email for existing players here yet
     setEditAvatar(player.avatar);
     setIsEditing(player.id);
   };
@@ -44,7 +47,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPag
     if (!editName.trim()) return;
 
     if (isEditing === 'new') {
-      onAddPlayer(editName, editAvatar);
+      onAddPlayer(editName, editAvatar, editEmail);
     } else if (isEditing) {
       onUpdatePlayer(isEditing, editName, editAvatar);
     }
@@ -117,11 +120,28 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPag
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Enter player name"
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-medium"
+                  placeholder="Player Name"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                   autoFocus
                 />
               </div>
+
+              {/* Email Input (New Player Only) */}
+              {isEditing === 'new' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">Email (Optional - Sends Invite)</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="player@example.com"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                  />
+                  <p className="text-xs text-slate-500">
+                    If provided, this player will receive an email to join the league and manage their profile.
+                  </p>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button

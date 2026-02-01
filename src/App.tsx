@@ -8,7 +8,7 @@ import { PlayersPage } from './pages/Players';
 import { HistoryPage } from './pages/History';
 import { Login } from './pages/Login';
 import { UsersPage } from './pages/UsersPage';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
 import { SeasonProvider, useSeason } from './context/SeasonContext';
 import { Seasons } from './pages/Seasons';
@@ -19,6 +19,7 @@ import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
 
 function MainApp() {
+  const { inviteUser } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const { currentSeasonId } = useSeason();
@@ -400,7 +401,7 @@ function MainApp() {
     }
   };
 
-  const handleAddPlayer = async (name: string, avatar?: string) => {
+  const handleAddPlayer = async (name: string, avatar?: string, email?: string) => {
     if (supabase) {
         const { data, error } = await supabase.from('players').insert([{ name, avatar }]).select().single();
         
@@ -418,6 +419,11 @@ function MainApp() {
                 stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
              };
              setPlayers([...players, newPlayer]);
+
+             // Invite user if email provided
+             if (email && email.trim()) {
+                 await inviteUser(email, 'viewer', data.id);
+             }
         }
     } else {
         const newPlayer: Player = {
@@ -427,6 +433,10 @@ function MainApp() {
             stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
         };
         setPlayers([...players, newPlayer]);
+
+        if (email) {
+            alert('Cannot invite user in offline mode');
+        }
     }
   };
 
