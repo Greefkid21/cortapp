@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Player } from '../types';
-import { UserPlus, Trash2, Shield, User, Edit2 } from 'lucide-react';
+import { UserPlus, Trash2, Shield, User, Edit2, Link as LinkIcon, AlertCircle } from 'lucide-react';
 import { AppUser } from '../types';
 
 export function UsersPage({ players }: { players: Player[] }) {
@@ -13,11 +13,79 @@ export function UsersPage({ players }: { players: Player[] }) {
   const [inviteRole, setInviteRole] = useState<AppUser['role']>('viewer');
   const [invitePlayerId, setInvitePlayerId] = useState<string | undefined>(undefined);
 
+  // Unified list of Users and Players
+  const unifiedList = useMemo(() => {
+    const list: Array<{
+        id: string; // unique key
+        type: 'linked' | 'player_only' | 'user_only';
+        name: string;
+        email?: string;
+        role?: AppUser['role'];
+        status?: AppUser['status'];
+        player?: Player;
+        user?: AppUser;
+    }> = [];
+
+    // 1. Process Players (Linked and Unlinked)
+    players.forEach(p => {
+        const linkedUser = users.find(u => u.playerId === p.id);
+        if (linkedUser) {
+            list.push({
+                id: `linked-${p.id}`,
+                type: 'linked',
+                name: p.name,
+                email: linkedUser.email,
+                role: linkedUser.role,
+                status: linkedUser.status,
+                player: p,
+                user: linkedUser
+            });
+        } else {
+            list.push({
+                id: `player-${p.id}`,
+                type: 'player_only',
+                name: p.name,
+                player: p
+            });
+        }
+    });
+
+    // 2. Process Users (Only those not already linked to a known player)
+    users.forEach(u => {
+        if (!u.playerId || !players.find(p => p.id === u.playerId)) {
+            list.push({
+                id: `user-${u.id}`,
+                type: 'user_only',
+                name: u.name || 'Unknown',
+                email: u.email,
+                role: u.role,
+                status: u.status,
+                user: u
+            });
+        }
+    });
+
+    // Sort: Admins first, then linked, then others
+    return list.sort((a, b) => {
+        if (a.role === 'admin' && b.role !== 'admin') return -1;
+        if (a.role !== 'admin' && b.role === 'admin') return 1;
+        return a.name.localeCompare(b.name);
+    });
+  }, [players, users]);
+
   const startEdit = (user: AppUser) => {
       setInviteEmail(user.email);
       setInviteRole(user.role);
       setInvitePlayerId(user.playerId);
       setEditingUser(user);
+      setIsInviting(true);
+  };
+
+  const startLinkPlayer = (player: Player) => {
+      setInviteEmail('');
+      setInviteRole('viewer');
+      setInvitePlayerId(player.id);
+      setEditingUser(null);
       setIsInviting(true);
   };
 
@@ -161,62 +229,96 @@ export function UsersPage({ players }: { players: Player[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {users.map((user) => (
-              <tr key={user.id} className="hover:bg-slate-50/50">
+            {unifiedList.map((item) => (
+              <tr key={item.id} className="hover:bg-slate-50/50">
                 <td className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        item.type === 'player_only' ? 'bg-slate-100 text-slate-300' : 'bg-primary/10 text-primary'
+                    }`}>
                         <User className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="font-bold text-slate-900">{user.name}</div>
-                      <div className="text-xs text-slate-500">{user.email}</div>
+                      <div className="font-bold text-slate-900 flex items-center gap-2">
+                        {item.name}
+                        {item.type === 'linked' && (
+                            <div title="Linked to Player">
+                                <LinkIcon className="w-3 h-3 text-primary" />
+                            </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {item.email || 'No email linked'}
+                      </div>
                     </div>
                   </div>
                 </td>
                 <td className="p-4">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    user.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
-                  }`}>
-                    <Shield className="w-3 h-3" />
-                    {user.role === 'admin' ? 'Admin' : 'Player'}
-                  </span>
+                  {item.role ? (
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        item.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        <Shield className="w-3 h-3" />
+                        {item.role === 'admin' ? 'Admin' : 'Viewer'}
+                      </span>
+                  ) : (
+                      <span className="text-slate-400 text-xs">-</span>
+                  )}
                 </td>
                 <td className="p-4">
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    user.status === 'active' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
-                  }`}>
-                    {user.status === 'active' ? 'Active' : 'Invited'}
-                  </span>
+                  {item.status ? (
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        item.status === 'active' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {item.status === 'active' ? 'Active' : 'Invited'}
+                      </span>
+                  ) : (
+                      <span className="flex items-center gap-1 text-slate-400 text-xs bg-slate-100 px-2 py-0.5 rounded-full w-fit">
+                          <AlertCircle className="w-3 h-3" /> No Access
+                      </span>
+                  )}
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {user.status === 'invited' && (
-                      <button
-                        onClick={() => updateUserStatus(user.id, 'active')}
-                        className="text-green-600 hover:text-green-700 p-2 hover:bg-green-50 rounded-lg transition-colors text-xs font-bold"
-                        title="Activate User"
-                      >
-                        Activate
-                      </button>
-                    )}
-                    
-                    <button
-                        onClick={() => startEdit(user)}
-                        className="text-slate-400 hover:text-primary p-2 hover:bg-slate-50 rounded-lg transition-colors"
-                        title="Edit User"
-                    >
-                        <Edit2 className="w-4 h-4" />
-                    </button>
+                    {item.type === 'player_only' ? (
+                        <button
+                            onClick={() => item.player && startLinkPlayer(item.player)}
+                            className="text-primary hover:text-teal-700 p-2 hover:bg-primary/5 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"
+                        >
+                            <UserPlus className="w-3 h-3" /> Grant Access
+                        </button>
+                    ) : (
+                        <>
+                            {item.status === 'invited' && item.user && (
+                            <button
+                                onClick={() => updateUserStatus(item.user!.id, 'active')}
+                                className="text-green-600 hover:text-green-700 p-2 hover:bg-green-50 rounded-lg transition-colors text-xs font-bold"
+                                title="Activate User"
+                            >
+                                Activate
+                            </button>
+                            )}
+                            
+                            {item.user && (
+                                <button
+                                    onClick={() => startEdit(item.user!)}
+                                    className="text-slate-400 hover:text-primary p-2 hover:bg-slate-50 rounded-lg transition-colors"
+                                    title="Edit User"
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                </button>
+                            )}
 
-                    {user.role !== 'admin' && (
-                      <button 
-                          onClick={() => deleteUser(user.id)}
-                          className="text-slate-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Remove User"
-                      >
-                          <Trash2 className="w-4 h-4" />
-                      </button>
+                            {item.role !== 'admin' && item.user && (
+                            <button 
+                                onClick={() => deleteUser(item.user!.id)}
+                                className="text-slate-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Remove User"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                            )}
+                        </>
                     )}
                   </div>
                 </td>

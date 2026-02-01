@@ -84,17 +84,24 @@ export function Layout() {
         <div className="flex justify-around items-center max-w-3xl mx-auto">
           {navItems.map(({ path, label, icon: Icon }) => {
             const isActive = location.pathname === path;
+            const isFixtures = path === '/fixtures';
+            
             return (
               <Link
                 key={path}
                 to={path}
                 className={cn(
-                  "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors duration-200",
+                  "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors duration-200 relative",
                   isActive 
                     ? "text-primary font-medium" 
                     : "text-slate-400 hover:text-slate-600"
                 )}
               >
+                {isFixtures && totalUnread > 0 && (
+                  <span className="absolute top-1 right-3 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white z-10">
+                    {totalUnread > 9 ? '9+' : totalUnread}
+                  </span>
+                )}
                 <Icon className={cn("w-6 h-6", isActive && "fill-current/10")} strokeWidth={isActive ? 2.5 : 2} />
                 <span className="text-xs">{label}</span>
               </Link>

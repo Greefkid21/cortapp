@@ -194,9 +194,14 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                                     )}
                                     <button 
                                         onClick={() => navigate(`/chat?matchId=${match.id}`)}
-                                        className="flex items-center gap-1 text-slate-600 font-bold hover:text-slate-900"
+                                        className="flex items-center gap-1 text-slate-600 font-bold hover:text-slate-900 relative"
                                     >
                                         <MessageSquare className="w-3 h-3" /> Chat
+                                        {getUnreadCount(match.id) > 0 && (
+                                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center border-2 border-white">
+                                                {getUnreadCount(match.id)}
+                                            </span>
+                                        )}
                                     </button>
                                     </div>
                                 </div>
