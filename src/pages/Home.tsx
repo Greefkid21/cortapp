@@ -40,15 +40,6 @@ export function Home({ players }: { players: Player[] }) {
         <h2 className="text-2xl font-bold text-slate-900">League Standings</h2>
       </div>
 
-      {/* Helper for user stuck in viewer mode */}
-      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 text-xs font-mono">
-          <p><strong>Debug Info:</strong></p>
-          <p>User ID: {user?.id || 'Not logged in'}</p>
-          <p>Email: {user?.email || '-'}</p>
-          <p>Role: {user?.role || '-'}</p>
-          <p>Is Admin?: {user?.role === 'admin' ? 'Yes' : 'No'}</p>
-      </div>
-
       {user && user.role !== 'admin' && (
           <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
               <h3 className="font-bold text-blue-800 mb-1">Admin Access Trouble?</h3>
