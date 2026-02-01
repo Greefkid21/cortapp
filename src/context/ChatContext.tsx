@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AppUser } from '../types';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 export interface ChatMessage {
   id: string;
@@ -15,14 +16,50 @@ interface ChatContextType {
   messages: ChatMessage[];
   getThread: (matchId: string) => ChatMessage[];
   sendMessage: (matchId: string, text: string, sender: AppUser) => Promise<void>;
+  markAsRead: (matchId: string) => void;
+  getUnreadCount: (matchId: string) => number;
   loading: boolean;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastRead, setLastRead] = useState<Record<string, number>>({});
+
+  // Load lastRead from local storage when user changes
+  useEffect(() => {
+    if (user) {
+        const stored = localStorage.getItem(`cortapp_last_read_${user.id}`);
+        if (stored) {
+            try {
+                setLastRead(JSON.parse(stored));
+            } catch {}
+        }
+    }
+  }, [user]);
+
+  const markAsRead = (matchId: string) => {
+    if (!user) return;
+    const now = Date.now();
+    setLastRead(prev => {
+        const next = { ...prev, [matchId]: now };
+        localStorage.setItem(`cortapp_last_read_${user.id}`, JSON.stringify(next));
+        return next;
+    });
+  };
+
+  const getUnreadCount = (matchId: string) => {
+    if (!user) return 0;
+    const readTime = lastRead[matchId] || 0;
+    return messages.filter(m => 
+        m.matchId === matchId && 
+        m.timestamp > readTime && 
+        m.senderUserId !== user.id
+    ).length;
+  };
 
   // Load messages
   useEffect(() => {
@@ -134,7 +171,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value = useMemo(() => ({ messages, getThread, sendMessage, loading }), [messages, loading]);
+  const value = useMemo(() => ({ 
+    messages, 
+    getThread, 
+    sendMessage, 
+    loading,
+    markAsRead,
+    getUnreadCount
+  }), [messages, loading, lastRead, user]);
+
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 

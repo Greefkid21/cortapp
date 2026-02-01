@@ -4,6 +4,7 @@ import { generateSchedule } from '../lib/scheduler';
 import { Calendar, Play, Shuffle, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useChat } from '../context/ChatContext';
 
 interface FixturesProps {
   players: Player[];
@@ -15,6 +16,7 @@ interface FixturesProps {
 export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: FixturesProps) {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const { getUnreadCount } = useChat();
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(players.map(p => p.id));
   const [generated, setGenerated] = useState<Match[]>([]);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);

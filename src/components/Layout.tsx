@@ -1,14 +1,24 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useMemo } from 'react';
 import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { useChat } from '../context/ChatContext';
 import { Logo } from './Logo';
 
 export function Layout() {
   const location = useLocation();
   const { isAdmin, logout, loading } = useAuth();
   const { settings } = useSettings();
+  const { messages, getUnreadCount } = useChat();
+
+  // Calculate total unread messages across all matches
+  // Using a Set to get unique match IDs, then summing unread counts
+  const totalUnread = useMemo(() => {
+      const uniqueMatchIds = Array.from(new Set(messages.map(m => m.matchId)));
+      return uniqueMatchIds.reduce((sum, id) => sum + getUnreadCount(id), 0);
+  }, [messages, getUnreadCount]);
 
   if (loading) {
     return (

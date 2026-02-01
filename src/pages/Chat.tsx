@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
@@ -8,12 +8,19 @@ import { Send, MessageSquare } from 'lucide-react';
 export function Chat({ matches, players }: { matches: Match[]; players: Player[] }) {
   const [params] = useSearchParams();
   const matchId = params.get('matchId') || '';
-  const { getThread, sendMessage } = useChat();
+  const { getThread, sendMessage, markAsRead, messages } = useChat();
   const { user, isAdmin } = useAuth();
   const [text, setText] = useState('');
 
   const match = useMemo(() => matches.find(m => m.id === matchId), [matches, matchId]);
   const thread = getThread(matchId);
+
+  // Mark as read when entering or when new messages arrive
+  useEffect(() => {
+    if (matchId && user) {
+        markAsRead(matchId);
+    }
+  }, [matchId, user, messages.length]); // Re-run when message count changes
 
   const participants = useMemo(() => {
     if (!match) return [];
