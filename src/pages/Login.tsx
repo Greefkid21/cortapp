@@ -109,6 +109,17 @@ export function Login() {
           >
             Magic Link
           </button>
+          <button
+            type="button"
+            onClick={() => { setMode('signup'); setError(''); setSuccess(''); }}
+            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+              mode === 'signup' 
+                ? 'bg-white text-slate-900 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Sign Up
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -159,7 +170,7 @@ export function Login() {
             type="submit"
             className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
           >
-            {mode === 'password' ? 'Login' : 'Send Magic Link'}
+            {mode === 'password' ? 'Login' : mode === 'signup' ? 'Sign Up' : 'Send Magic Link'}
             {mode === 'magic-link' && <Wand2 className="w-4 h-4" />}
           </button>
           
