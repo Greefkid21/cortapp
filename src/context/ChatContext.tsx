@@ -110,6 +110,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         console.error('Error sending message:', error);
         throw error;
       }
+      
+      // Optimistic update
+      const optimisticMsg: ChatMessage = {
+        id: 'temp-' + Date.now(),
+        matchId,
+        senderUserId: sender.id,
+        senderName: sender.name,
+        text,
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, optimisticMsg]);
     } else {
       const msg: ChatMessage = {
         id: Math.random().toString(36).slice(2),
