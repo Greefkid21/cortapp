@@ -1,33 +1,17 @@
--- 1. Update the trigger to make the first user an admin automatically
-create or replace function public.handle_new_user() 
-returns trigger as $$
-declare
-  invite_record record;
-  admin_count int;
-begin
-  -- Check if there are any existing admins
-  select count(*) into admin_count from public.profiles where role = 'admin';
+-- Fix permissions and ensure admin access
 
-  -- Check if there is an invite for this email
-  select * into invite_record from public.user_invites where email = new.email order by created_at desc limit 1;
-  
-  if admin_count = 0 then
-    -- First user is always admin
-    insert into public.profiles (id, email, role, status)
-    values (new.id, new.email, 'admin', 'active');
-  elsif invite_record.email is not null then
-    -- Found invite, use its role and player_id
-    insert into public.profiles (id, email, role, status, player_id)
-    values (new.id, new.email, invite_record.role, 'active', invite_record.player_id);
-  else
-    -- No invite, default to viewer
-    insert into public.profiles (id, email, role, status)
-    values (new.id, new.email, 'viewer', 'active');
-  end if;
-  
-  return new;
-end;
-$$ language plpgsql security definer;
+-- 1. Create profiles for any users that are missing them (e.g. if trigger failed)
+-- This will make ALL current users admins. 
+INSERT INTO public.profiles (id, email, role, status)
+SELECT id, email, 'admin', 'active'
+FROM auth.users
+ON CONFLICT (id) DO UPDATE 
+SET role = 'admin', status = 'active';
 
--- 2. Make all existing users admins (Run this if you already signed up)
-update public.profiles set role = 'admin';
+-- 2. Add policy to allow users to insert their own profile (fixes "Grant Access" button for future)
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- 3. Ensure update policy exists
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
