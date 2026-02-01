@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Listen for auth changes
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (session?.user) {
+            if (session?.user && supabase) {
               const { data: profile } = await supabase
                 .from('profiles')
                 .select('*')
@@ -327,7 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = user?.role === 'admin';
  
   return (
-    <AuthContext.Provider value={{ user, isAdmin, users, login, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Trophy, PlusCircle, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings } from 'lucide-react';
+import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';

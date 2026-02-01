@@ -14,7 +14,7 @@ interface FixturesProps {
 
 export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: FixturesProps) {
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin } = useAuth();
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(players.map(p => p.id));
   const [generated, setGenerated] = useState<Match[]>([]);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
