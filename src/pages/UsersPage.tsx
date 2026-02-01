@@ -144,9 +144,22 @@ export function UsersPage({ players }: { players: Player[] }) {
       {isInviting && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">
-                {editingUser ? 'Edit User' : 'Invite New User'}
+            <h3 className="text-xl font-bold text-slate-800 mb-2">
+                {editingUser 
+                    ? 'Edit User' 
+                    : invitePlayerId 
+                        ? `Enable Login for ${players.find(p => p.id === invitePlayerId)?.name}`
+                        : 'Invite New User'
+                }
             </h3>
+            
+            {invitePlayerId && !editingUser && (
+                <p className="text-sm text-slate-500 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    This will create a user account for <strong>{players.find(p => p.id === invitePlayerId)?.name}</strong>. 
+                    They will be able to log in using the email below to view fixtures and chat.
+                </p>
+            )}
+
             <form onSubmit={handleInvite} className="space-y-4">
               <div>
                 <label className="text-sm font-bold text-slate-700">Email Address</label>
