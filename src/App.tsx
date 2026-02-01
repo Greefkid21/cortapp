@@ -700,7 +700,7 @@ function MainApp() {
         <Route index element={<Home players={players} />} />
         <Route path="fixtures" element={<Fixtures players={players} matches={matches} onAddMatches={handleAddMatches} onUpdateMatch={handleUpdateMatch} />} />
         <Route path="players" element={<PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} />} />
-        <Route path="add-match" element={<AddMatch players={players} onAddMatch={handleAddMatch} matches={matches} />} />
+        {/* <Route path="add-match" element={<AddMatch players={players} onAddMatch={handleAddMatch} matches={matches} />} /> */}
         <Route path="history" element={<HistoryPage matches={matches} players={players} onEditResult={handleEditMatchResult} />} />
         <Route path="login" element={<Login />} />
         <Route path="users" element={<UsersPage players={players} />} />

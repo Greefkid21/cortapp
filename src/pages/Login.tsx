@@ -4,12 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, Wand2 } from 'lucide-react';
 
 export function Login() {
-  const [mode, setMode] = useState<'password' | 'magic-link'>('password');
+  const [mode, setMode] = useState<'password' | 'magic-link' | 'signup'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const { login, loginWithMagicLink } = useAuth();
+  const { login, signup, loginWithMagicLink } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -17,7 +17,33 @@ export function Login() {
     setError('');
     setSuccess('');
 
-    if (mode === 'password') {
+    if (mode === 'signup') {
+      if (!email || !password) {
+        setError('Please enter both email and password');
+        return;
+      }
+      const result = await signup(email, password);
+      if (result.success) {
+        setSuccess('Account created! Logging you in...');
+        // Auto login after signup?
+        // Actually Supabase usually logs in automatically after signup if email confirmation is disabled.
+        // If email confirmation is enabled, they need to check email.
+        // Let's try to login or just wait for session change.
+        // But for better UX, let's just say "Account created!" and let AuthContext handle session update if it happens.
+        // If Supabase is set to require email verification, they won't be logged in.
+        // For this project, I assume default might be verification required?
+        // Let's assume they might need to verify.
+        setSuccess('Account created! Please check your email to verify your account, or try logging in.');
+        
+        // Try to login immediately just in case verification is off
+        const loginSuccess = await login(email, password);
+        if (loginSuccess) {
+             navigate('/');
+        }
+      } else {
+        setError(result.error || 'Failed to sign up');
+      }
+    } else if (mode === 'password') {
       // Support legacy "admin123" input in the password field if email is empty
       if (!email && password === 'admin123') {
           if (await login('admin123')) {
@@ -101,7 +127,7 @@ export function Login() {
             </div>
           </div>
 
-          {mode === 'password' && (
+          {mode !== 'magic-link' && (
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase ml-1">Password</label>
               <div className="relative">

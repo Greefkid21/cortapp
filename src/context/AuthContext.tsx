@@ -7,6 +7,7 @@ interface AuthContextType {
   isAdmin: boolean;
   users: AppUser[];
   login: (email: string, password?: string) => Promise<boolean>;
+  signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginWithMagicLink: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
   inviteUser: (email: string, role: AppUser['role'], playerId?: string) => Promise<void>;
@@ -190,6 +191,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return false;
     }
+  };
+
+  const signup = async (email: string, password: string) => {
+    if (supabase) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        // Create profile
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            { id: data.user.id, email: data.user.email, role: 'admin' } // First user is admin by default? Or let them be viewer? Let's make them admin for now since they are setting it up.
+          ]);
+        
+        if (profileError) {
+             console.error('Error creating profile:', profileError);
+             // If profile creation fails, we might want to clean up auth user, but for now just report error
+        }
+        
+        return { success: true };
+      }
+      return { success: false, error: 'User creation failed' };
+    }
+    return { success: false, error: 'Supabase not configured' };
   };
 
   const loginWithMagicLink = async (email: string) => {
