@@ -25,6 +25,13 @@ export function UsersPage({ players }: { players: Player[] }) {
     e.preventDefault();
     
     if (editingUser) {
+        // Safety check: Prevent admin from accidentally demoting themselves
+        if (editingUser.id === users.find(u => u.email === inviteEmail)?.id && editingUser.role === 'admin' && inviteRole !== 'admin') {
+             if (!confirm('Warning: You are about to remove your own Admin privileges. You will lose access to this page. Are you sure?')) {
+                 return;
+             }
+        }
+
         // Update existing user
         await updateUserProfile(editingUser.id, {
             role: inviteRole,
@@ -87,23 +94,26 @@ export function UsersPage({ players }: { players: Player[] }) {
               </div>
               
               <div>
-                <label className="text-sm font-bold text-slate-700">Role</label>
+                <label className="text-sm font-bold text-slate-700">App Access Role</label>
                 <div className="flex gap-2 mt-1">
                     <button
                         type="button"
                         onClick={() => setInviteRole('admin')}
-                        className={`flex-1 p-2 rounded-lg border ${inviteRole === 'admin' ? 'bg-primary/10 border-primary text-primary font-bold' : 'border-slate-200 text-slate-500'}`}
+                        className={`flex-1 p-2 rounded-lg border text-sm ${inviteRole === 'admin' ? 'bg-primary/10 border-primary text-primary font-bold' : 'border-slate-200 text-slate-500'}`}
                     >
-                        Admin
+                        Admin (Full Access)
                     </button>
                     <button
                         type="button"
                         onClick={() => setInviteRole('viewer')}
-                        className={`flex-1 p-2 rounded-lg border ${inviteRole === 'viewer' ? 'bg-primary/10 border-primary text-primary font-bold' : 'border-slate-200 text-slate-500'}`}
+                        className={`flex-1 p-2 rounded-lg border text-sm ${inviteRole === 'viewer' ? 'bg-primary/10 border-primary text-primary font-bold' : 'border-slate-200 text-slate-500'}`}
                     >
-                        Player
+                        Viewer (Read Only)
                     </button>
                 </div>
+                <p className="text-xs text-slate-400 mt-1">
+                    Admins can manage scores and users. Viewers can only see results.
+                </p>
               </div>
 
               <div>
