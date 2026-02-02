@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { Player, Match } from '../types';
-import { Trophy, X, TrendingUp, TrendingDown, Minus, Calendar, ArrowLeft } from 'lucide-react';
+import { Trophy, TrendingUp, ArrowLeft } from 'lucide-react';
 import { useMemo } from 'react';
 
 interface PlayerProfileProps {
@@ -128,7 +128,7 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
         </h3>
         {recentForm.length > 0 ? (
             <div className="flex gap-2">
-                {recentForm.map((match, i) => (
+                {recentForm.map((match) => (
                     <div 
                         key={match.id} 
                         className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm

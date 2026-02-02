@@ -1,11 +1,12 @@
 import { supabase } from './supabase';
+import { Match, Player, AppUser } from '../types';
 
 /**
  * Sends an email notification using a Supabase Edge Function.
  * Note: You must deploy the 'send-email' function to your Supabase project for this to work.
  */
 export const sendEmailNotification = async (
-  to: string, 
+  to: string | string[], 
   subject: string, 
   html: string
 ) => {
@@ -14,9 +15,12 @@ export const sendEmailNotification = async (
     return;
   }
 
+  const recipients = Array.isArray(to) ? to : [to];
+  if (recipients.length === 0) return;
+
   try {
     const { error } = await supabase.functions.invoke('send-email', {
-      body: { to, subject, html }
+      body: { to: recipients, subject, html }
     });
 
     if (error) {
@@ -97,10 +101,25 @@ export const notifyMatchUpdate = async (matchId: string, resultDescription: stri
             await sendEmailNotification(
                 p.email,
                 'Match Update',
-                `<p>A match you are involved in has been updated:</p>
-                 <p><strong>${resultDescription}</strong></p>
-                 <p><a href="https://cortapp.vercel.app/history">View Match History</a></p>`
+                `<p>Match ${matchId} has been updated.</p><p>${resultDescription}</p>`
             );
         }
     }
+};
+
+export const getParticipantsFromData = (
+  match: Match, 
+  players: Player[], 
+  users: AppUser[]
+) => {
+  const playerIds = [...match.team1, ...match.team2];
+  
+  // Find users linked to these players
+  const participantUsers = users.filter(u => u.playerId && playerIds.includes(u.playerId));
+  const emails = participantUsers.map(u => u.email).filter(Boolean) as string[];
+  
+  // Get player names
+  const names = playerIds.map(id => players.find(p => p.id === id)?.name || 'Unknown');
+  
+  return { emails, names };
 };

@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 interface EmailRequest {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
 }
@@ -25,6 +25,9 @@ serve(async (req) => {
         throw new Error("Missing RESEND_API_KEY environment variable");
     }
 
+    // Ensure 'to' is an array for Resend API
+    const recipients = Array.isArray(to) ? to : [to];
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -33,7 +36,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: "Cortapp League <onboarding@resend.dev>", // Change this to your verified domain later
-        to: [to],
+        to: recipients,
         subject: subject,
         html: html,
       }),

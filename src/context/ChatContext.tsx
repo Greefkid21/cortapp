@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { AppUser } from '../types';
+import { AppUser, Match, Player } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { notifyNewMessage } from '../lib/notifications';
+import { sendEmailNotification, getParticipantsFromData } from '../lib/notifications';
 
 export interface ChatMessage {
   id: string;
@@ -27,7 +27,7 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRead, setLastRead] = useState<Record<string, number>>({});
@@ -143,7 +143,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const getThread = (matchId: string) =>
     messages.filter(m => m.matchId === matchId).sort((a, b) => a.timestamp - b.timestamp);
 
-  const sendMessage = async (matchId: string, text: string, sender: AppUser) => {
+  const sendMessage = async (matchId: string, text: string, sender: AppUser, context?: { match: Match, players: Player[] }) => {
     if (supabase) {
       const { error } = await supabase
         .from('messages')
@@ -169,6 +169,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         timestamp: Date.now()
       };
       setMessages(prev => [...prev, optimisticMsg]);
+
+      // Send Email Notification
+      if (context) {
+          const { match, players } = context;
+          const participants = getParticipantsFromData(match, players, users);
+          
+          // Filter out sender from recipients
+          const recipientEmails = participants.emails.filter(email => email !== sender.email);
+          
+          if (recipientEmails.length > 0) {
+              const subject = `New Message from ${sender.name}`;
+              const html = `
+                  <p><strong>${sender.name}</strong> sent a message in the match chat (${participants.names.join(' vs ')}):</p>
+                  <blockquote style="background: #f1f5f9; padding: 10px; border-left: 4px solid #0f766e; border-radius: 4px;">${text}</blockquote>
+                  <p><a href="https://cortapp.vercel.app/chat?matchId=${matchId}">Open Chat</a></p>
+              `;
+              sendEmailNotification(recipientEmails, subject, html);
+          }
+      }
     } else {
       const msg: ChatMessage = {
         id: Math.random().toString(36).slice(2),

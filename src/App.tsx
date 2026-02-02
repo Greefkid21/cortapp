@@ -18,10 +18,10 @@ import { Chat } from './pages/Chat';
 import { PlayerProfile } from './pages/PlayerProfile';
 import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
-import { notifyMatchUpdate } from './lib/notifications';
+import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
 
 function MainApp() {
-  const { inviteUser } = useAuth();
+  const { inviteUser, users } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const { currentSeasonId } = useSeason();
@@ -210,6 +210,21 @@ function MainApp() {
         if (error) {
             console.error('Error updating match:', error);
             return;
+        }
+
+        // Send Email Notification
+        const participants = getParticipantsFromData(updatedMatch, players, users);
+        const subject = `Match Update: ${participants.names.join(' vs ')}`;
+        const html = `
+          <h1>Match Result Updated</h1>
+          <p>The match between <strong>${participants.names[0]} & ${participants.names[1]}</strong> and <strong>${participants.names[2]} & ${participants.names[3]}</strong> has been updated.</p>
+          <p><strong>Winner:</strong> ${newStats.winner === 'team1' ? 'Team 1' : newStats.winner === 'team2' ? 'Team 2' : 'Draw'}</p>
+          <p><strong>Score:</strong> ${updatedMatch.sets.map(s => `${s.team1}-${s.team2}`).join(', ')}</p>
+          <p><a href="https://cortapp.vercel.app/history">View Match History</a></p>
+        `;
+        
+        if (participants.emails.length > 0) {
+            sendEmailNotification(participants.emails, subject, html);
         }
     }
 
