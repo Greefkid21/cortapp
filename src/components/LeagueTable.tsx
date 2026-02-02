@@ -45,11 +45,10 @@ export function LeagueTable({ players }: LeagueTableProps) {
                     <td className="px-4 py-3 text-center font-medium text-slate-400">
                       {index + 1}
                     </td>
-                    <td className="px-4 py-3 p-0 relative">
+                    <td className="p-0 relative">
                       <Link 
                         to={`/player/${player.id}`} 
-                        className="flex items-center gap-3 hover:opacity-80 transition-opacity w-full h-full block"
-                        style={{ minHeight: '40px' }}
+                        className="flex items-center gap-3 hover:bg-slate-50 transition-colors w-full h-full px-4 py-3"
                       >
                         <div className={cn(
                           "w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden border",
