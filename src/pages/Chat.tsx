@@ -1,16 +1,18 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useChat } from '../context/ChatContext';
+import { useChat, ChatMessage } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 import { Player, Match } from '../types';
-import { Send, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, Edit2, Trash2, X, Check } from 'lucide-react';
 
 export function Chat({ matches, players }: { matches: Match[]; players: Player[] }) {
   const [params] = useSearchParams();
   const matchId = params.get('matchId') || '';
-  const { getThread, sendMessage, markAsRead, messages } = useChat();
+  const { getThread, sendMessage, editMessage, deleteMessage, markAsRead, messages } = useChat();
   const { user, isAdmin } = useAuth();
   const [text, setText] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   const match = useMemo(() => matches.find(m => m.id === matchId), [matches, matchId]);
   const thread = getThread(matchId);
@@ -41,6 +43,31 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
     }
   };
 
+  const handleEditStart = (msg: ChatMessage) => {
+    setEditingMessageId(msg.id);
+    setEditText(msg.text);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingMessageId || !editText.trim()) return;
+    try {
+      await editMessage(editingMessageId, editText.trim());
+      setEditingMessageId(null);
+      setEditText('');
+    } catch (err: any) {
+      alert('Failed to update message: ' + err.message);
+    }
+  };
+
+  const handleDelete = async (messageId: string) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+    try {
+      await deleteMessage(messageId);
+    } catch (err: any) {
+      alert('Failed to delete message: ' + err.message);
+    }
+  };
+
   if (!match) {
     return <div className="p-6">Match not found.</div>;
   }
@@ -63,19 +90,52 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
             thread.map(m => {
               const mine = user?.id === m.senderUserId;
               const senderName = m.senderName || getPlayerName(m.senderUserId) || 'User';
+              const canEdit = mine || isAdmin;
+              const isEditing = editingMessageId === m.id;
+
               return (
-                <div
-                  key={m.id}
-                  className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
-                    mine
-                      ? 'ml-auto bg-primary text-white'
-                      : 'mr-auto bg-white text-slate-800 border border-slate-200'
-                  }`}
+                <div 
+                  key={m.id} 
+                  className={`flex flex-col ${mine ? 'items-end' : 'items-start'} group relative`}
+                  title={`Sender: ${m.senderUserId} | You: ${user?.id}`}
                 >
-                  <div className="opacity-70 text-xs mb-1">
-                    {mine ? 'You' : senderName}
+                  <div className="opacity-70 text-xs mb-1 flex justify-between items-center gap-2">
+                    <span>{mine ? 'You' : senderName}</span>
+                    {canEdit && !isEditing && (
+                        <div className="flex gap-2 bg-white/80 dark:bg-slate-800/80 rounded px-1">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleEditStart(m); }} 
+                                className="text-slate-400 hover:text-yellow-600 p-1" 
+                                title="Edit"
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }} 
+                                className="text-slate-400 hover:text-red-600 p-1" 
+                                title="Delete"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    )}
                   </div>
-                  <div>{m.text}</div>
+                  
+                  {isEditing ? (
+                      <div className="flex gap-1 items-center mt-1">
+                          <input 
+                            value={editText} 
+                            onChange={e => setEditText(e.target.value)}
+                            className="text-slate-900 px-2 py-1 rounded text-xs flex-1 w-full outline-none"
+                            autoFocus
+                            onKeyDown={e => e.key === 'Enter' && handleEditSave()}
+                          />
+                          <button onClick={handleEditSave} className="p-1 hover:bg-white/20 rounded"><Check size={14} /></button>
+                          <button onClick={() => setEditingMessageId(null)} className="p-1 hover:bg-white/20 rounded"><X size={14} /></button>
+                      </div>
+                  ) : (
+                      <div>{m.text}</div>
+                  )}
                 </div>
               );
             })

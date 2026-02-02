@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Player } from '../types';
 import { UserPlus, Trash2, Shield, User, Edit2, Link as LinkIcon, AlertCircle } from 'lucide-react';
 import { AppUser } from '../types';
+import { Link } from 'react-router-dom';
 
 export function UsersPage({ players }: { players: Player[] }) {
   const { users, inviteUser, deleteUser, isAdmin, updateUserStatus, updateUserProfile } = useAuth();

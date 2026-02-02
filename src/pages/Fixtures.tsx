@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Player, Match } from '../types';
 import { generateSchedule } from '../lib/scheduler';
 import { Calendar, Play, Shuffle, MessageSquare } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 
@@ -124,9 +124,13 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                                 {roundMatches.map((m, idx) => (
                                     <div key={m.id || idx} className="text-xs bg-slate-50 p-2 rounded flex justify-between items-center border border-slate-100">
                                         <span>
-                                            <span className="font-medium">{getPlayerName(m.team1[0])}</span>/{getPlayerName(m.team1[1])}
+                                            <Link to={`/player/${m.team1[0]}`} className="font-medium hover:underline hover:text-primary">{getPlayerName(m.team1[0])}</Link>
+                                            /
+                                            <Link to={`/player/${m.team1[1]}`} className="font-medium hover:underline hover:text-primary">{getPlayerName(m.team1[1])}</Link>
                                             <span className="text-slate-300 mx-2">vs</span>
-                                            <span className="font-medium">{getPlayerName(m.team2[0])}</span>/{getPlayerName(m.team2[1])}
+                                            <Link to={`/player/${m.team2[0]}`} className="font-medium hover:underline hover:text-primary">{getPlayerName(m.team2[0])}</Link>
+                                            /
+                                            <Link to={`/player/${m.team2[1]}`} className="font-medium hover:underline hover:text-primary">{getPlayerName(m.team2[1])}</Link>
                                         </span>
                                     </div>
                                 ))}
@@ -208,15 +212,15 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                                 
                                 <div className="flex justify-between items-center">
                                     <div className="flex-1 flex flex-col gap-1">
-                                        <span className="text-sm font-medium">{getPlayerName(match.team1[0])}</span>
-                                        <span className="text-sm font-medium">{getPlayerName(match.team1[1])}</span>
+                                        <Link to={`/player/${match.team1[0]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team1[0])}</Link>
+                                        <Link to={`/player/${match.team1[1]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team1[1])}</Link>
                                     </div>
 
                                     <div className="text-xs font-bold text-slate-300 px-4">VS</div>
 
                                     <div className="flex-1 flex flex-col gap-1 text-right">
-                                        <span className="text-sm font-medium">{getPlayerName(match.team2[0])}</span>
-                                        <span className="text-sm font-medium">{getPlayerName(match.team2[1])}</span>
+                                        <Link to={`/player/${match.team2[0]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team2[0])}</Link>
+                                        <Link to={`/player/${match.team2[1]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team2[1])}</Link>
                                     </div>
                                 </div>
                             </div>

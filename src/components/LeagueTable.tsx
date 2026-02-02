@@ -1,6 +1,7 @@
 import { Player } from '../types';
 import { cn } from '../lib/utils';
 import { Medal } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface LeagueTableProps {
   players: Player[];
@@ -44,8 +45,12 @@ export function LeagueTable({ players }: LeagueTableProps) {
                     <td className="px-4 py-3 text-center font-medium text-slate-400">
                       {index + 1}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
+                    <td className="px-4 py-3 p-0 relative">
+                      <Link 
+                        to={`/player/${player.id}`} 
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity w-full h-full block"
+                        style={{ minHeight: '40px' }}
+                      >
                         <div className={cn(
                           "w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden border",
                           index === 0 ? "border-yellow-400 ring-2 ring-yellow-100" : 
@@ -68,7 +73,7 @@ export function LeagueTable({ players }: LeagueTableProps) {
                             {player.name}
                         </span>
                         {index === 0 && <Medal className="w-4 h-4 text-yellow-400 fill-yellow-400 ml-auto sm:ml-0" />}
-                      </div>
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-center text-slate-500">{player.stats.matchesPlayed}</td>
                     <td className="px-4 py-3 text-center text-green-600 font-medium">{player.stats.wins}</td>

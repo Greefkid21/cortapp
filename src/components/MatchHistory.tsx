@@ -4,6 +4,7 @@ import { cn } from '../lib/utils';
 import { Calendar, Pencil, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { MatchForm } from './MatchForm';
+import { Link } from 'react-router-dom';
 
 interface MatchHistoryProps {
   matches: Match[];
@@ -84,8 +85,8 @@ export function MatchHistory({ matches, players, onEditResult }: MatchHistoryPro
               <div className="flex justify-between items-center">
                 {/* Team 1 */}
                 <div className={cn("flex-1 flex flex-col gap-1", match.winner === 'team1' && "font-bold text-slate-900")}>
-                  <span className="text-sm">{getPlayerName(match.team1[0])}</span>
-                  <span className="text-sm">{getPlayerName(match.team1[1])}</span>
+                  <Link to={`/player/${match.team1[0]}`} className="text-sm hover:underline">{getPlayerName(match.team1[0])}</Link>
+                  <Link to={`/player/${match.team1[1]}`} className="text-sm hover:underline">{getPlayerName(match.team1[1])}</Link>
                 </div>
 
                 {/* Score */}
@@ -97,8 +98,8 @@ export function MatchHistory({ matches, players, onEditResult }: MatchHistoryPro
 
                 {/* Team 2 */}
                 <div className={cn("flex-1 flex flex-col gap-1 text-right", match.winner === 'team2' && "font-bold text-slate-900")}>
-                  <span className="text-sm">{getPlayerName(match.team2[0])}</span>
-                  <span className="text-sm">{getPlayerName(match.team2[1])}</span>
+                  <Link to={`/player/${match.team2[0]}`} className="text-sm hover:underline">{getPlayerName(match.team2[0])}</Link>
+                  <Link to={`/player/${match.team2[1]}`} className="text-sm hover:underline">{getPlayerName(match.team2[1])}</Link>
                 </div>
               </div>
             </div>

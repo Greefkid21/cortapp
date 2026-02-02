@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AppUser } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { notifyNewMessage } from '../lib/notifications';
 
 export interface ChatMessage {
   id: string;
@@ -16,6 +17,8 @@ interface ChatContextType {
   messages: ChatMessage[];
   getThread: (matchId: string) => ChatMessage[];
   sendMessage: (matchId: string, text: string, sender: AppUser) => Promise<void>;
+  editMessage: (messageId: string, newText: string) => Promise<void>;
+  deleteMessage: (messageId: string) => Promise<void>;
   markAsRead: (matchId: string) => void;
   getUnreadCount: (matchId: string) => number;
   loading: boolean;
@@ -82,7 +85,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             }));
             setMessages(mappedMessages);
             
-            // Subscribe to new messages
+            // Subscribe to changes
             const subscription = supabase
               .channel('public:messages')
               .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
@@ -96,6 +99,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   timestamp: new Date(newMsg.created_at).getTime()
                 };
                 setMessages(prev => [...prev, mapped]);
+              })
+              .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
+                const updated = payload.new;
+                setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, text: updated.text } : m));
+              })
+              .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
+                const deletedId = payload.old.id;
+                setMessages(prev => prev.filter(m => m.id !== deletedId));
               })
               .subscribe();
               
@@ -171,10 +182,40 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const editMessage = async (messageId: string, newText: string) => {
+    if (supabase) {
+      const { error } = await supabase
+        .from('messages')
+        .update({ text: newText })
+        .eq('id', messageId);
+      if (error) throw error;
+      // Optimistic update
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText } : m));
+    } else {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText } : m));
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    if (supabase) {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId);
+      if (error) throw error;
+      // Optimistic update
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+    } else {
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+    }
+  };
+
   const value = useMemo(() => ({ 
     messages, 
     getThread, 
-    sendMessage, 
+    sendMessage,
+    editMessage,
+    deleteMessage,
     loading,
     markAsRead,
     getUnreadCount

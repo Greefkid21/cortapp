@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Player } from '../types';
 import { User, Edit2, Plus, Upload, X, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 
 interface PlayersPageProps {
   players: Player[];
@@ -166,8 +167,8 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPag
       {/* Players List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {players.map((player) => (
-          <div key={player.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div key={player.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:border-primary/30 transition-colors">
+            <Link to={`/player/${player.id}`} className="flex items-center gap-4 flex-1 hover:opacity-80 transition-opacity">
               <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-100">
                 {player.avatar ? (
                   <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" />
@@ -178,14 +179,18 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPag
                 )}
               </div>
               <div>
-                <h3 className="font-bold text-slate-900">{player.name}</h3>
+                <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors">{player.name}</h3>
                 <p className="text-xs text-slate-500">{player.stats.matchesPlayed} matches played</p>
               </div>
-            </div>
+            </Link>
             {isAdmin && (
             <button 
-              onClick={() => startEdit(player)}
-              className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors"
+              onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  startEdit(player);
+              }}
+              className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors z-10"
             >
               <Edit2 className="w-5 h-5" />
             </button>
