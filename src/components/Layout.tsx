@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useMemo } from 'react';
-import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -12,6 +12,7 @@ export function Layout() {
   const { isAdmin, logout, loading } = useAuth();
   const { settings } = useSettings();
   const { messages, getUnreadCount } = useChat();
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // Calculate total unread messages across all matches
   // Using a Set to get unique match IDs, then summing unread counts
@@ -34,12 +35,22 @@ export function Layout() {
     ...(isAdmin ? [
         // { path: '/add-match', label: 'Entry', icon: PlusCircle }, // Hidden as per request
         { path: '/users', label: 'Admin', icon: Shield },
-        { path: '/seasons', label: 'Seasons', icon: Archive },
-        { path: '/settings', label: 'Settings', icon: Settings },
         { path: '/players', label: 'Players', icon: Users },
         { path: '/history', label: 'History', icon: History },
+        { path: '/seasons', label: 'Seasons', icon: Archive },
+        { path: '/settings', label: 'Settings', icon: Settings },
     ] : []),
   ];
+
+  // Mobile navigation logic
+  // If we have more than 5 items, we show 4 items + "More" button
+  const MAX_VISIBLE_ITEMS = 4;
+  const needsMoreMenu = navItems.length > 5;
+  
+  const visibleItems = needsMoreMenu ? navItems.slice(0, MAX_VISIBLE_ITEMS) : navItems;
+  const hiddenItems = needsMoreMenu ? navItems.slice(MAX_VISIBLE_ITEMS) : [];
+  
+  const isMoreActive = hiddenItems.some(item => item.path === location.pathname);
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-900 pb-20">
@@ -79,10 +90,41 @@ export function Layout() {
         <Outlet />
       </main>
 
+      {/* More Menu Overlay */}
+      {showMoreMenu && (
+        <>
+            <div 
+                className="fixed inset-0 bg-black/20 z-20 backdrop-blur-sm"
+                onClick={() => setShowMoreMenu(false)}
+            />
+            <div className="fixed bottom-24 right-4 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 min-w-[180px] flex flex-col gap-1 z-30 animate-in slide-in-from-bottom-5 fade-in duration-200">
+                {hiddenItems.map(({ path, label, icon: Icon }) => {
+                    const isActive = location.pathname === path;
+                    return (
+                        <Link
+                            key={path}
+                            to={path}
+                            onClick={() => setShowMoreMenu(false)}
+                            className={cn(
+                                "flex items-center gap-3 p-3 rounded-xl transition-colors",
+                                isActive 
+                                    ? "bg-primary/10 text-primary font-medium" 
+                                    : "text-slate-600 hover:bg-slate-50"
+                            )}
+                        >
+                            <Icon className="w-5 h-5" />
+                            <span className="text-sm">{label}</span>
+                        </Link>
+                    );
+                })}
+            </div>
+        </>
+      )}
+
       {/* Bottom Navigation for Mobile / Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-2 pb-safe z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 pb-safe z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex justify-around items-center max-w-3xl mx-auto">
-          {navItems.map(({ path, label, icon: Icon }) => {
+          {visibleItems.map(({ path, label, icon: Icon }) => {
             const isActive = location.pathname === path;
             const isFixtures = path === '/fixtures';
             
@@ -90,8 +132,9 @@ export function Layout() {
               <Link
                 key={path}
                 to={path}
+                onClick={() => setShowMoreMenu(false)}
                 className={cn(
-                  "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors duration-200 relative",
+                  "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors duration-200 relative min-w-[60px]",
                   isActive 
                     ? "text-primary font-medium" 
                     : "text-slate-400 hover:text-slate-600"
@@ -103,10 +146,29 @@ export function Layout() {
                   </span>
                 )}
                 <Icon className={cn("w-6 h-6", isActive && "fill-current/10")} strokeWidth={isActive ? 2.5 : 2} />
-                <span className="text-xs">{label}</span>
+                <span className="text-xs truncate max-w-[70px]">{label}</span>
               </Link>
             );
           })}
+
+          {needsMoreMenu && (
+            <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className={cn(
+                  "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors duration-200 relative min-w-[60px]",
+                  (isMoreActive || showMoreMenu)
+                    ? "text-primary font-medium" 
+                    : "text-slate-400 hover:text-slate-600"
+                )}
+            >
+                {showMoreMenu ? (
+                    <X className="w-6 h-6" strokeWidth={2.5} />
+                ) : (
+                    <MoreHorizontal className="w-6 h-6" strokeWidth={isMoreActive ? 2.5 : 2} />
+                )}
+                <span className="text-xs">More</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>
