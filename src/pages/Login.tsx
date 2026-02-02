@@ -175,11 +175,7 @@ export function Login() {
           </button>
           
           {mode === 'password' && (
-            <div className="text-center">
-                <p className="text-xs text-slate-400">
-                    Default Admin: admin@cortapp.com / (any pass)
-                </p>
-            </div>
+             null
           )}
         </form>
       </div>

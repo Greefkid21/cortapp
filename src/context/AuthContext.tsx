@@ -233,7 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([
-            { id: data.user.id, email: data.user.email, role: 'admin' } // First user is admin by default? Or let them be viewer? Let's make them admin for now since they are setting it up.
+            { id: data.user.id, email: data.user.email, role: 'viewer' }
           ]);
         
         if (profileError) {
