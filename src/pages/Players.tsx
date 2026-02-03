@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Player } from '../types';
-import { User, Edit2, Plus, Upload, X, Save } from 'lucide-react';
+import { User, Edit2, Plus, Upload, X, Save, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
@@ -8,9 +8,10 @@ interface PlayersPageProps {
   players: Player[];
   onAddPlayer: (name: string, avatar?: string, email?: string) => Promise<void>;
   onUpdatePlayer: (id: string, name: string, avatar?: string) => Promise<void>;
+  onDeletePlayer: (id: string) => Promise<void>;
 }
 
-export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPageProps) {
+export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlayer }: PlayersPageProps) {
   const { isAdmin } = useAuth();
   const [isEditing, setIsEditing] = useState<string | null>(null); // 'new' or player ID
   const [editName, setEditName] = useState('');
@@ -194,16 +195,30 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPag
               </div>
             </Link>
             {isAdmin && (
-            <button 
-              onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  startEdit(player);
-              }}
-              className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors z-10"
-            >
-              <Edit2 className="w-5 h-5" />
-            </button>
+            <div className="flex gap-1">
+                <button 
+                  onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      startEdit(player);
+                  }}
+                  className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors z-10"
+                  title="Edit Player"
+                >
+                  <Edit2 className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDeletePlayer(player.id);
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors z-10"
+                  title="Delete Player"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+            </div>
             )}
           </div>
         ))}

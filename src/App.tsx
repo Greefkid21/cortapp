@@ -492,6 +492,24 @@ function MainApp() {
     }
   };
 
+  const handleDeletePlayer = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this player? This cannot be undone.')) return;
+
+    if (supabase) {
+        const { error } = await supabase.from('players').delete().eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting player:', error);
+            alert('Failed to delete player: ' + error.message);
+            return;
+        }
+
+        setPlayers(players.filter(p => p.id !== id));
+    } else {
+        setPlayers(players.filter(p => p.id !== id));
+    }
+  };
+
   if (loadingData && supabase) {
       return <div className="p-8 text-center">Loading Data...</div>;
   }
@@ -501,7 +519,7 @@ function MainApp() {
         <Route path="/" element={<Layout />}>
         <Route index element={<Home players={players} />} />
         <Route path="fixtures" element={<Fixtures players={players} matches={matches} onAddMatches={handleAddMatches} onUpdateMatch={handleUpdateMatch} />} />
-        <Route path="players" element={<PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} />} />
+        <Route path="players" element={<PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} onDeletePlayer={handleDeletePlayer} />} />
         <Route path="player/:id" element={<PlayerProfile players={players} matches={matches} />} />
         {/* <Route path="add-match" element={<AddMatch players={players} onAddMatch={handleAddMatch} matches={matches} />} /> */}
         <Route path="history" element={<HistoryPage matches={matches} players={players} onEditResult={handleEditMatchResult} />} />

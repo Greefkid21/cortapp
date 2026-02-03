@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
-import { Settings as SettingsIcon, Save, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { Settings as SettingsIcon, Save, AlertCircle, Lock, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function Settings() {
@@ -17,6 +18,10 @@ export function Settings() {
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -51,11 +56,88 @@ export function Settings() {
     }
   };
 
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabase) return;
+    
+    setProfileMessage(null);
+
+    try {
+        const updates: { email?: string; password?: string } = {};
+        if (newEmail) updates.email = newEmail;
+        if (newPassword) updates.password = newPassword;
+
+        if (Object.keys(updates).length === 0) return;
+
+        const { error } = await supabase.auth.updateUser(updates);
+
+        if (error) throw error;
+
+        setProfileMessage({ type: 'success', text: 'Profile updated! Check your email if you changed it.' });
+        setNewEmail('');
+        setNewPassword('');
+    } catch (error: any) {
+        setProfileMessage({ type: 'error', text: error.message });
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center gap-2">
         <SettingsIcon className="w-6 h-6 text-primary" />
         <h2 className="text-2xl font-bold text-slate-900">League Settings</h2>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <SettingsIcon className="w-5 h-5" /> Account Settings
+        </h3>
+        
+        <form onSubmit={handleUpdateProfile} className="space-y-4">
+            <div className="space-y-2">
+                <label className="block text-sm font-bold text-slate-700">Change Email</label>
+                <div className="relative">
+                    <Mail className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                    <input
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        placeholder={user?.email || 'New Email'}
+                        className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <label className="block text-sm font-bold text-slate-700">Change Password</label>
+                <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                    <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="New Password"
+                        className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+                    />
+                </div>
+            </div>
+
+            {profileMessage && (
+                <div className={`p-3 rounded-lg text-sm font-medium ${
+                    profileMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                }`}>
+                    {profileMessage.text}
+                </div>
+            )}
+
+            <button
+                type="submit"
+                disabled={!newEmail && !newPassword}
+                className="w-full py-3 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Update Profile
+            </button>
+        </form>
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
