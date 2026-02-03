@@ -500,7 +500,11 @@ function MainApp() {
         
         if (error) {
             console.error('Error deleting player:', error);
-            alert('Failed to delete player: ' + error.message);
+            if (error.code === '23503') { // Foreign key violation
+                alert('Cannot delete player because they are part of existing matches or invites. Please delete those first.');
+            } else {
+                alert('Failed to delete player: ' + error.message);
+            }
             return;
         }
 

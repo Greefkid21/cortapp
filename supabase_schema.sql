@@ -99,11 +99,13 @@ create policy "Auth update seasons" on seasons for update using (auth.role() = '
 create policy "Public read players" on players for select using (true);
 create policy "Auth insert players" on players for insert with check (auth.role() = 'authenticated');
 create policy "Auth update players" on players for update using (auth.role() = 'authenticated');
+create policy "Auth delete players" on players for delete using (auth.role() = 'authenticated');
 
 -- MATCHES
 create policy "Public read matches" on matches for select using (true);
 create policy "Auth insert matches" on matches for insert with check (auth.role() = 'authenticated');
 create policy "Auth update matches" on matches for update using (auth.role() = 'authenticated');
+create policy "Auth delete matches" on matches for delete using (auth.role() = 'authenticated');
 
 -- PROFILES
 create policy "Public read profiles" on profiles for select using (true);
@@ -112,10 +114,12 @@ create policy "Users can update own profile" on profiles for update using (auth.
 -- USER INVITES
 create policy "Auth read invites" on user_invites for select using (auth.role() = 'authenticated');
 create policy "Auth insert invites" on user_invites for insert with check (auth.role() = 'authenticated');
+create policy "Auth delete invites" on user_invites for delete using (auth.role() = 'authenticated');
 
 -- MESSAGES
 create policy "Auth read messages" on messages for select using (auth.role() = 'authenticated');
 create policy "Auth insert messages" on messages for insert with check (auth.role() = 'authenticated');
+create policy "Auth delete messages" on messages for delete using (auth.role() = 'authenticated');
 
 -- TRIGGER for creating profile on signup
 create or replace function public.handle_new_user() 
