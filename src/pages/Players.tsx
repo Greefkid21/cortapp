@@ -43,16 +43,26 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPag
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editName.trim()) return;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    if (isEditing === 'new') {
-      onAddPlayer(editName, editAvatar, editEmail);
-    } else if (isEditing) {
-      onUpdatePlayer(isEditing, editName, editAvatar);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      if (isEditing === 'new') {
+        await onAddPlayer(editName, editAvatar, editEmail);
+      } else if (isEditing) {
+        await onUpdatePlayer(isEditing, editName, editAvatar);
+      }
+      setIsEditing(null);
+    } catch (error) {
+      console.error('Error saving player:', error);
+      // Alert is handled in App.tsx
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsEditing(null);
   };
 
   return (
