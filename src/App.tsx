@@ -441,7 +441,20 @@ function MainApp() {
              // Invite user if email provided
              if (email && email.trim()) {
                  try {
-                    await inviteUser(email, 'viewer', data.id);
+                    const result = await inviteUser(email, 'viewer', data.id);
+                    
+                    if (result && !result.emailSent) {
+                        // Email failed (or we just want to be safe), show copy link dialog
+                        const inviteLink = `https://cortapp.vercel.app/login`; // Or specific signup link
+                        const message = `Player added! \n\nBecause email delivery can be unreliable without a custom domain, please manually send this link to ${name}:\n\n${inviteLink}\n\n(Ask them to sign up with: ${email})`;
+                        
+                        // Small timeout to ensure UI updates first
+                        setTimeout(() => {
+                            window.prompt(message, inviteLink);
+                        }, 100);
+                    } else if (result && result.emailSent) {
+                        alert(`Player added and invite email sent to ${email}!`);
+                    }
                  } catch (err) {
                     console.error("Failed to invite user:", err);
                     alert("Player added, but failed to send invite email.");

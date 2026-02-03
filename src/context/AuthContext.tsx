@@ -11,7 +11,7 @@ interface AuthContextType {
   signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginWithMagicLink: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  inviteUser: (email: string, role: AppUser['role'], playerId?: string) => Promise<void>;
+  inviteUser: (email: string, role: AppUser['role'], playerId?: string) => Promise<{ success: boolean; emailSent: boolean; message?: string }>;
   deleteUser: (id: string) => Promise<void>;
   updateUserStatus: (id: string, status: AppUser['status']) => Promise<void>;
   updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string }) => Promise<void>;
@@ -275,7 +275,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('cortapp_user_id');
   };
 
-  const inviteUser = async (email: string, role: AppUser['role'], playerId?: string) => {
+  const inviteUser = async (email: string, role: AppUser['role'], playerId?: string): Promise<{ success: boolean; emailSent: boolean; message?: string }> => {
     if (supabase) {
       // 1. Store invite in user_invites table
       const { error: inviteError } = await supabase
@@ -284,7 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
       if (inviteError) {
         console.error('Error creating invite:', inviteError);
-        return;
+        return { success: false, emailSent: false, message: inviteError.message };
       }
 
       // 2. Send magic link via Supabase (primary auth method)
@@ -297,13 +297,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (otpError) {
         console.error('Error sending invite email (Supabase):', otpError);
-      } else {
-        // alert(`Invite sent to ${email}! They will receive a magic link.`);
       }
 
-      // 3. Send custom notification email via Resend (more reliable delivery)
-      // Note: We cannot generate the magic link manually without admin API.
-      // So this email just notifies them to check for the magic link or sign up.
+      // 3. Send custom notification email via Resend
       const subject = "You've been invited to join Cortapp League";
       const html = `
         <h1>You've been invited!</h1>
@@ -316,13 +312,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const { error: emailError } = await sendEmailNotification(email, subject, html);
       
-      if (emailError) {
-        console.error('Failed to send invite email:', emailError);
-        alert(`Invite created, but email failed to send. Please check your Resend API Key or Edge Function logs.`);
-      } else {
-        alert(`Invite sent to ${email}!`);
-      }
-      
       // Refresh users list (optimistic update)
       const newUser: AppUser = {
         id: 'pending-' + Math.random(),
@@ -333,6 +322,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         playerId
       };
       setUsers([...users, newUser]);
+
+      if (emailError) {
+        return { success: true, emailSent: false, message: 'Invite created but email failed.' };
+      } else {
+        return { success: true, emailSent: true, message: 'Invite sent successfully.' };
+      }
       
     } else {
       // MOCK MODE
@@ -345,6 +340,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         playerId
       };
       setUsers([...users, newUser]);
+      return { success: true, emailSent: false, message: 'Mock invite created.' };
     }
   };
 
