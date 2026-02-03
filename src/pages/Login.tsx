@@ -140,7 +140,7 @@ export function Login() {
             </div>
           </div>
 
-          {mode !== 'magic-link' && (
+          {mode === 'password' && (
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase ml-1">Password</label>
               <div className="relative">
@@ -153,31 +153,76 @@ export function Login() {
                   className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-medium"
                   />
               </div>
+              <div className="flex justify-end mt-1">
+                <button
+                  type="button"
+                  onClick={() => { setMode('forgot-password'); setError(''); setSuccess(''); }}
+                  className="text-xs text-primary font-bold hover:underline"
+                >
+                  Forgot Password?
+                </button>
+              </div>
             </div>
+          )}
+          
+          {mode === 'signup' && (
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Create Password</label>
+              <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                  <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-medium"
+                  />
+              </div>
+            </div>
+          )}
+          
+          {mode === 'forgot-password' && (
+             <div className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                Enter your email address and we'll send you a link to reset your password.
+             </div>
           )}
 
           {error && (
-            <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-2 rounded-lg">
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium">
               {error}
             </div>
           )}
           
           {success && (
-            <div className="text-green-600 text-sm text-center font-medium bg-green-50 p-2 rounded-lg">
+            <div className="p-3 bg-green-50 text-green-600 text-sm rounded-xl font-medium">
               {success}
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
+            disabled={mode === 'signup' ? (!email || !password) : !email}
+            className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {mode === 'password' ? 'Login' : mode === 'signup' ? 'Sign Up' : 'Send Magic Link'}
-            {mode === 'magic-link' && <Wand2 className="w-4 h-4" />}
+            {mode === 'password' ? 'Login' : 
+             mode === 'signup' ? 'Create Account' : 
+             mode === 'forgot-password' ? 'Send Reset Link' : 
+             (
+               <>
+                 <Wand2 className="w-4 h-4" />
+                 Send Magic Link
+               </>
+             )}
           </button>
           
-          {mode === 'password' && (
-             null
+          {mode === 'forgot-password' && (
+            <button
+                type="button"
+                onClick={() => { setMode('password'); setError(''); setSuccess(''); }}
+                className="w-full text-slate-500 text-sm font-bold hover:text-slate-800 mt-2"
+            >
+                Back to Login
+            </button>
           )}
         </form>
       </div>
