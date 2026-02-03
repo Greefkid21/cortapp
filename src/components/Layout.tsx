@@ -30,9 +30,11 @@ export function Layout() {
   }
 
   const navItems = [
-    { path: '/', label: 'League', icon: Trophy },
-    { path: '/fixtures', label: 'Fixtures', icon: Calendar },
-    { path: '/settings', label: 'Settings', icon: Settings },
+    ...(user ? [
+        { path: '/', label: 'League', icon: Trophy },
+        { path: '/fixtures', label: 'Fixtures', icon: Calendar },
+        { path: '/settings', label: 'Settings', icon: Settings },
+    ] : []),
     ...(isAdmin ? [
         // { path: '/add-match', label: 'Entry', icon: PlusCircle }, // Hidden as per request
         { path: '/users', label: 'Admin', icon: Shield },

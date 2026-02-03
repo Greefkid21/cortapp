@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 // import { AddMatch } from './pages/AddMatch';
@@ -19,6 +19,24 @@ import { PlayerProfile } from './pages/PlayerProfile';
 import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
+
+function RequireAuth({ children }: { children: JSX.Element }) {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
 
 function MainApp() {
   const { inviteUser, users } = useAuth();
@@ -521,17 +539,21 @@ function MainApp() {
   return (
     <Routes>
         <Route path="/" element={<Layout />}>
-        <Route index element={<Home players={players} />} />
-        <Route path="fixtures" element={<Fixtures players={players} matches={matches} onAddMatches={handleAddMatches} onUpdateMatch={handleUpdateMatch} />} />
-        <Route path="players" element={<PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} onDeletePlayer={handleDeletePlayer} />} />
-        <Route path="player/:id" element={<PlayerProfile players={players} matches={matches} />} />
-        {/* <Route path="add-match" element={<AddMatch players={players} onAddMatch={handleAddMatch} matches={matches} />} /> */}
-        <Route path="history" element={<HistoryPage matches={matches} players={players} onEditResult={handleEditMatchResult} />} />
+        {/* Public Route */}
         <Route path="login" element={<Login />} />
-        <Route path="users" element={<UsersPage players={players} />} />
-        <Route path="seasons" element={<Seasons players={players} matches={matches} onReset={handleResetForNewSeason} />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="chat" element={<Chat matches={matches} players={players} />} />
+
+        {/* Protected Routes */}
+        <Route index element={<RequireAuth><Home players={players} /></RequireAuth>} />
+        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onAddMatches={handleAddMatches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
+        <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
+        <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
+        <Route path="chat" element={<RequireAuth><Chat matches={matches} players={players} /></RequireAuth>} />
+        
+        {/* Admin Routes (already guarded by UI but good to add check) */}
+        <Route path="players" element={<RequireAuth><PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} onDeletePlayer={handleDeletePlayer} /></RequireAuth>} />
+        <Route path="history" element={<RequireAuth><HistoryPage matches={matches} players={players} onEditResult={handleEditMatchResult} /></RequireAuth>} />
+        <Route path="users" element={<RequireAuth><UsersPage players={players} /></RequireAuth>} />
+        <Route path="seasons" element={<RequireAuth><Seasons players={players} matches={matches} onReset={handleResetForNewSeason} /></RequireAuth>} />
         </Route>
     </Routes>
   );
