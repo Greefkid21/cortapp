@@ -314,7 +314,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <p>Use your email: <strong>${email}</strong></p>
       `;
       
-      await sendEmailNotification(email, subject, html);
+      const { error: emailError } = await sendEmailNotification(email, subject, html);
+      
+      if (emailError) {
+        console.error('Failed to send invite email:', emailError);
+        alert(`Invite created, but email failed to send. Please check your Resend API Key or Edge Function logs.`);
+      } else {
+        alert(`Invite sent to ${email}!`);
+      }
       
       // Refresh users list (optimistic update)
       const newUser: AppUser = {

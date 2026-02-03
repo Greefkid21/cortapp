@@ -12,22 +12,26 @@ export const sendEmailNotification = async (
 ) => {
   if (!supabase) {
     console.log('[Mock Email]', { to, subject, html });
-    return;
+    return { error: null };
   }
 
   const recipients = Array.isArray(to) ? to : [to];
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return { error: 'No recipients' };
 
   try {
-    const { error } = await supabase.functions.invoke('send-email', {
+    const { data, error } = await supabase.functions.invoke('send-email', {
       body: { to: recipients, subject, html }
     });
 
     if (error) {
       console.warn('Failed to send email notification (check if Edge Function is deployed):', error);
+      return { error };
     }
+    
+    return { data, error: null };
   } catch (err) {
     console.error('Error invoking send-email function:', err);
+    return { error: err };
   }
 };
 
