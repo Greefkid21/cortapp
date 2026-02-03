@@ -12,7 +12,7 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
       {...props}
     >
       <circle cx="12" cy="12" r="9" />
-      <line x1="18.5" y1="5.5" x2="5.5" y2="18.5" />
+      <line x1="5.5" y1="5.5" x2="18.5" y2="18.5" />
     </svg>
   );
 }
