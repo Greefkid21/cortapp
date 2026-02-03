@@ -15,6 +15,7 @@ interface AuthContextType {
   deleteUser: (id: string) => Promise<void>;
   updateUserStatus: (id: string, status: AppUser['status']) => Promise<void>;
   updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string }) => Promise<void>;
+  resetPassword: (email: string) => Promise<boolean>;
   loading: boolean;
 }
 
@@ -398,10 +399,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    if (supabase) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+      });
+      
+      if (error) {
+        console.error('Error resetting password:', error);
+        return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
   const isAdmin = user?.role === 'admin';
  
   return (
-    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, loading }}>
       {children}
     </AuthContext.Provider>
   );

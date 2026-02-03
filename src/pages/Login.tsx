@@ -4,12 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, Wand2 } from 'lucide-react';
 
 export function Login() {
-  const [mode, setMode] = useState<'password' | 'magic-link' | 'signup'>('password');
+  const [mode, setMode] = useState<'password' | 'magic-link' | 'signup' | 'forgot-password'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const { login, signup, loginWithMagicLink } = useAuth();
+  const { login, signup, loginWithMagicLink, resetPassword } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,15 +24,6 @@ export function Login() {
       }
       const result = await signup(email, password);
       if (result.success) {
-        setSuccess('Account created! Logging you in...');
-        // Auto login after signup?
-        // Actually Supabase usually logs in automatically after signup if email confirmation is disabled.
-        // If email confirmation is enabled, they need to check email.
-        // Let's try to login or just wait for session change.
-        // But for better UX, let's just say "Account created!" and let AuthContext handle session update if it happens.
-        // If Supabase is set to require email verification, they won't be logged in.
-        // For this project, I assume default might be verification required?
-        // Let's assume they might need to verify.
         setSuccess('Account created! Please check your email to verify your account, or try logging in.');
         
         // Try to login immediately just in case verification is off
@@ -56,6 +47,17 @@ export function Login() {
         navigate('/');
       } else {
         setError('Invalid email or password');
+      }
+    } else if (mode === 'forgot-password') {
+      if (!email) {
+        setError('Please enter your email');
+        return;
+      }
+      const sent = await resetPassword(email);
+      if (sent) {
+        setSuccess('Password reset link sent! Check your email.');
+      } else {
+        setError('Failed to send reset link. Please try again.');
       }
     } else {
       // Magic Link
