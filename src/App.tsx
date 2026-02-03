@@ -425,7 +425,7 @@ function MainApp() {
         if (error) {
             console.error('Error adding player:', error);
             alert('Failed to add player: ' + error.message);
-            return;
+            throw error;
         }
 
         if (data) {
@@ -435,11 +435,17 @@ function MainApp() {
                 avatar: data.avatar,
                 stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
              };
-             setPlayers([...players, newPlayer]);
+             // Use functional update to ensure fresh state
+             setPlayers(prev => [...prev, newPlayer]);
 
              // Invite user if email provided
              if (email && email.trim()) {
-                 await inviteUser(email, 'viewer', data.id);
+                 try {
+                    await inviteUser(email, 'viewer', data.id);
+                 } catch (err) {
+                    console.error("Failed to invite user:", err);
+                    alert("Player added, but failed to send invite email.");
+                 }
              }
         }
     } else {
@@ -449,7 +455,7 @@ function MainApp() {
             avatar,
             stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
         };
-        setPlayers([...players, newPlayer]);
+        setPlayers(prev => [...prev, newPlayer]);
 
         if (email) {
             alert('Cannot invite user in offline mode');

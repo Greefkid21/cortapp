@@ -6,8 +6,8 @@ import { Link } from 'react-router-dom';
 
 interface PlayersPageProps {
   players: Player[];
-  onAddPlayer: (name: string, avatar?: string, email?: string) => void;
-  onUpdatePlayer: (id: string, name: string, avatar?: string) => void;
+  onAddPlayer: (name: string, avatar?: string, email?: string) => Promise<void>;
+  onUpdatePlayer: (id: string, name: string, avatar?: string) => Promise<void>;
 }
 
 export function PlayersPage({ players, onAddPlayer, onUpdatePlayer }: PlayersPageProps) {

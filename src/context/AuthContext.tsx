@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AppUser } from '../types';
 import { supabase } from '../lib/supabase';
+import { sendEmailNotification } from '../lib/notifications';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -286,7 +287,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // 2. Send magic link
+      // 2. Send magic link via Supabase (primary auth method)
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email,
         options: {
@@ -295,10 +296,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       if (otpError) {
-        console.error('Error sending invite email:', otpError);
+        console.error('Error sending invite email (Supabase):', otpError);
       } else {
-        alert(`Invite sent to ${email}! They will receive a magic link.`);
+        // alert(`Invite sent to ${email}! They will receive a magic link.`);
       }
+
+      // 3. Send custom notification email via Resend (more reliable delivery)
+      // Note: We cannot generate the magic link manually without admin API.
+      // So this email just notifies them to check for the magic link or sign up.
+      const subject = "You've been invited to join Cortapp League";
+      const html = `
+        <h1>You've been invited!</h1>
+        <p>You have been invited to join the Cortapp Padel League.</p>
+        <p>We have sent a separate email with a secure login link (Magic Link).</p>
+        <p>If you don't see it, you can also login directly here:</p>
+        <p><a href="https://cortapp.vercel.app/login">Login to Cortapp</a></p>
+        <p>Use your email: <strong>${email}</strong></p>
+      `;
+      
+      await sendEmailNotification(email, subject, html);
       
       // Refresh users list (optimistic update)
       const newUser: AppUser = {
