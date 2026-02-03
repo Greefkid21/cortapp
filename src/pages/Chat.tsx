@@ -1,9 +1,9 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useChat, ChatMessage } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 import { Player, Match } from '../types';
-import { Send, MessageSquare, Edit2, Trash2, X, Check } from 'lucide-react';
+import { Send, MessageSquare, Edit2, Trash2, X, Check, ArrowLeft } from 'lucide-react';
 
 export function Chat({ matches, players }: { matches: Match[]; players: Player[] }) {
   const [params] = useSearchParams();
@@ -74,9 +74,18 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <MessageSquare className="w-5 h-5 text-primary" />
-        <h2 className="text-2xl font-bold text-slate-900">Match Chat</h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-5 h-5 text-primary" />
+          <h2 className="text-2xl font-bold text-slate-900">Match Chat</h2>
+        </div>
+        <Link 
+          to="/fixtures" 
+          className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-primary transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Fixtures
+        </Link>
       </div>
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
         <div className="text-sm text-slate-600 mb-3">
