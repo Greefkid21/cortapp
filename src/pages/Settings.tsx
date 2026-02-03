@@ -36,9 +36,7 @@ export function Settings() {
 
   // Protect route
   useEffect(() => {
-    if (user && user.role !== 'admin') {
-      navigate('/');
-    }
+    // We now allow non-admins for account settings
   }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -90,7 +88,7 @@ export function Settings() {
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5" /> Account Settings
+            <Lock className="w-5 h-5" /> Account Settings
         </h3>
         
         <form onSubmit={handleUpdateProfile} className="space-y-4">
@@ -140,93 +138,79 @@ export function Settings() {
         </form>
       </div>
 
+      {user?.role === 'admin' && (
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+             <SettingsIcon className="w-5 h-5" /> League Rules
+        </h3>
+
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* League Name */}
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-slate-700">
-              League Name
-            </label>
-            <input
-              type="text"
-              value={formData.league_name}
-              onChange={(e) => setFormData(prev => ({ ...prev, league_name: e.target.value }))}
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-              placeholder="e.g. cørtapp"
-            />
-            <p className="text-xs text-slate-500">
-              This name will be displayed in the app header and browser title.
-            </p>
+          <div className="space-y-4">
+            <h3 className="font-bold text-slate-700 border-b border-slate-100 pb-2">General</h3>
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-slate-700">League Name</label>
+              <input
+                type="text"
+                value={formData.league_name}
+                onChange={(e) => setFormData({ ...formData, league_name: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
           </div>
 
-          <hr className="border-slate-100" />
-
-          {/* Scoring Structure */}
           <div className="space-y-4">
-            <h3 className="text-lg font-bold text-slate-800">Scoring Structure</h3>
-            <p className="text-sm text-slate-500 bg-amber-50 p-3 rounded-lg border border-amber-100 flex gap-2">
-              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-              Changes to scoring will apply to future matches. Existing matches retain their awarded points.
-            </p>
-
+            <h3 className="font-bold text-slate-700 border-b border-slate-100 pb-2">Scoring System</h3>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="block text-sm font-bold text-slate-700">
-                  Win
-                </label>
+                <label className="block text-sm font-bold text-slate-700">Win</label>
                 <input
                   type="number"
                   value={formData.points_win}
-                  onChange={(e) => setFormData(prev => ({ ...prev, points_win: parseInt(e.target.value) || 0 }))}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  onChange={(e) => setFormData({ ...formData, points_win: parseInt(e.target.value) || 0 })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-bold text-slate-700">
-                  Draw
-                </label>
+                <label className="block text-sm font-bold text-slate-700">Draw</label>
                 <input
                   type="number"
                   value={formData.points_draw}
-                  onChange={(e) => setFormData(prev => ({ ...prev, points_draw: parseInt(e.target.value) || 0 }))}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  onChange={(e) => setFormData({ ...formData, points_draw: parseInt(e.target.value) || 0 })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-bold text-slate-700">
-                  Loss
-                </label>
+                <label className="block text-sm font-bold text-slate-700">Loss</label>
                 <input
                   type="number"
                   value={formData.points_loss}
-                  onChange={(e) => setFormData(prev => ({ ...prev, points_loss: parseInt(e.target.value) || 0 }))}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  onChange={(e) => setFormData({ ...formData, points_loss: parseInt(e.target.value) || 0 })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
                 />
               </div>
             </div>
           </div>
 
           {message && (
-            <div className={`p-4 rounded-xl text-sm font-medium ${
+            <div className={`p-4 rounded-xl flex items-center gap-2 ${
               message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
             }`}>
-              {message.text}
+              {message.type === 'error' && <AlertCircle className="w-5 h-5" />}
+              <span className="font-medium">{message.text}</span>
             </div>
           )}
 
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : <><Save className="w-5 h-5" /> Save Settings</>}
-            </button>
-          </div>
-
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+          >
+            <Save className="w-5 h-5" />
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
         </form>
       </div>
+      )}
     </div>
   );
 }

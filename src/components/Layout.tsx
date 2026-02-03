@@ -9,7 +9,7 @@ import { Logo } from './Logo';
 
 export function Layout() {
   const location = useLocation();
-  const { isAdmin, logout, loading } = useAuth();
+  const { user, isAdmin, logout, loading } = useAuth();
   const { settings } = useSettings();
   const { messages, getUnreadCount } = useChat();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -32,13 +32,13 @@ export function Layout() {
   const navItems = [
     { path: '/', label: 'League', icon: Trophy },
     { path: '/fixtures', label: 'Fixtures', icon: Calendar },
+    { path: '/settings', label: 'Settings', icon: Settings },
     ...(isAdmin ? [
         // { path: '/add-match', label: 'Entry', icon: PlusCircle }, // Hidden as per request
         { path: '/users', label: 'Admin', icon: Shield },
         { path: '/players', label: 'Players', icon: Users },
         { path: '/history', label: 'History', icon: History },
         { path: '/seasons', label: 'Seasons', icon: Archive },
-        { path: '/settings', label: 'Settings', icon: Settings },
     ] : []),
   ];
 
@@ -65,22 +65,33 @@ export function Layout() {
             </h1>
           </div>
           
-          {isAdmin ? (
+          {user && !isAdmin && (
+            <Link 
+              to="/settings"
+              className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
+          )}
+          {user ? (
             <button 
               onClick={logout}
               className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              title="Logout Admin"
+              title="Logout"
             >
               <LogOut className="w-5 h-5" />
             </button>
           ) : (
-            <Link 
-              to="/login"
-              className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors"
-              title="Admin Login"
-            >
-              <Lock className="w-5 h-5" />
-            </Link>
+             <div className="flex gap-2">
+                 <Link 
+                  to="/login"
+                  className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors"
+                  title="Login"
+                >
+                  <Lock className="w-5 h-5" />
+                </Link>
+             </div>
           )}
         </div>
       </header>
