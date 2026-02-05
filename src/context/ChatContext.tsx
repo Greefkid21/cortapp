@@ -178,14 +178,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessages(prev => [...prev, optimisticMsg]);
 
     if (supabase) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
         .insert([{
           match_id: matchId,
           sender_user_id: sender.id,
           sender_name: sender.name,
           text
-        }]);
+        }])
+        .select()
+        .single();
         
       if (error) {
         console.error('Error sending message:', error);
@@ -194,8 +196,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
       
-      // We don't need to add the "real" message here because the subscription will catch it.
-      // And the subscription handler now has logic to remove the optimistic message.
+      if (data) {
+        const realMsg: ChatMessage = {
+            id: data.id,
+            matchId: data.match_id,
+            senderUserId: data.sender_user_id,
+            senderName: data.sender_name,
+            text: data.text,
+            timestamp: new Date(data.created_at).getTime()
+        };
+
+        setMessages(prev => {
+            // Check if the real message was already added by the subscription
+            if (prev.some(m => m.id === realMsg.id)) {
+                // If so, just remove the temporary one
+                return prev.filter(m => m.id !== tempId);
+            }
+            // Otherwise, replace the temporary message with the real one
+            return prev.map(m => m.id === tempId ? realMsg : m);
+        });
+      }
 
       // Send Email Notification
       if (context) {
