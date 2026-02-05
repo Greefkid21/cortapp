@@ -155,6 +155,12 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
             type="text"
             value={text}
             onChange={e => setText(e.target.value)}
+            onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                }
+            }}
             placeholder={
               canPost
                 ? 'Type a message...'
