@@ -83,7 +83,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               text: m.text,
               timestamp: new Date(m.created_at).getTime()
             }));
-            setMessages(mappedMessages);
+            
+            setMessages(prev => {
+              // Merge fetched messages with existing (real-time) messages
+              // Deduplicate by ID
+              const existingIds = new Set(prev.map(m => m.id));
+              const uniqueFetched = mappedMessages.filter(m => !existingIds.has(m.id));
+              return [...prev, ...uniqueFetched].sort((a, b) => a.timestamp - b.timestamp);
+            });
             
             // Subscribe to changes
             const subscription = supabase
@@ -98,7 +105,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   text: newMsg.text,
                   timestamp: new Date(newMsg.created_at).getTime()
                 };
-                setMessages(prev => [...prev, mapped]);
+                
+                setMessages(prev => {
+                  // Check if already exists (deduplicate)
+                  if (prev.some(m => m.id === mapped.id)) return prev;
+                  
+                  // Also remove any temporary/optimistic messages that match this one
+                  // (matching by sender and text is a heuristic, but often sufficient)
+                  const filtered = prev.filter(m => 
+                    !m.id.startsWith('temp-') || 
+                    m.senderUserId !== mapped.senderUserId || 
+                    m.text !== mapped.text
+                  );
+                  
+                  return [...filtered, mapped];
+                });
               })
               .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
                 const updated = payload.new;
@@ -144,6 +165,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     messages.filter(m => m.matchId === matchId).sort((a, b) => a.timestamp - b.timestamp);
 
   const sendMessage = async (matchId: string, text: string, sender: AppUser, context?: { match: Match, players: Player[] }) => {
+    // Optimistic update - Add immediately
+    const tempId = 'temp-' + Date.now();
+    const optimisticMsg: ChatMessage = {
+        id: tempId,
+        matchId,
+        senderUserId: sender.id,
+        senderName: sender.name,
+        text,
+        timestamp: Date.now()
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+
     if (supabase) {
       const { error } = await supabase
         .from('messages')
@@ -156,19 +189,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         
       if (error) {
         console.error('Error sending message:', error);
+        // Rollback optimistic update
+        setMessages(prev => prev.filter(m => m.id !== tempId));
         throw error;
       }
       
-      // Optimistic update
-      const optimisticMsg: ChatMessage = {
-        id: 'temp-' + Date.now(),
-        matchId,
-        senderUserId: sender.id,
-        senderName: sender.name,
-        text,
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, optimisticMsg]);
+      // We don't need to add the "real" message here because the subscription will catch it.
+      // And the subscription handler now has logic to remove the optimistic message.
 
       // Send Email Notification
       if (context) {

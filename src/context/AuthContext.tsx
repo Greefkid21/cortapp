@@ -269,11 +269,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
+    // Clear local state immediately to prevent UI delay
     setUser(null);
     localStorage.removeItem('cortapp_user_id');
+    
+    if (supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.error('Error signing out:', error);
+      }
+    }
   };
 
   const inviteUser = async (email: string, role: AppUser['role'], playerId?: string): Promise<{ success: boolean; emailSent: boolean; message?: string }> => {
