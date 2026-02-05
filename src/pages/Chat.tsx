@@ -29,7 +29,7 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
     return [...match.team1, ...match.team2];
   }, [match]);
 
-  const canPost = !!user && (isAdmin || (user.playerId && participants.includes(user.playerId)));
+  const canPost = !!user;
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
 
@@ -164,7 +164,7 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
             placeholder={
               canPost
                 ? 'Type a message...'
-                : 'Only participants and admins can post'
+                : 'Login to post'
             }
             disabled={!canPost}
             className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
