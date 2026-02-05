@@ -55,13 +55,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 playerId: profile.player_id
               });
             } else {
-              // Fallback if profile is missing (e.g. trigger didn't run)
-              setUser({
+              // Profile missing - Create it now (Self-healing)
+              const newUser = {
                 id: session.user.id,
                 email: session.user.email || '',
+                role: 'viewer' as const,
+                status: 'active' as const
+              };
+              
+              // Insert into database
+              const client = supabase;
+              if (client) {
+                  client.from('profiles').insert([newUser]).then(({ error }) => {
+                    if (error) console.error('Error auto-creating profile:', error);
+                  });
+              }
+
+              setUser({
+                ...newUser,
                 name: session.user.email?.split('@')[0] || 'User',
-                role: 'viewer',
-                status: 'active',
                 playerId: undefined
               });
             }
@@ -86,13 +98,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   playerId: profile.player_id
                 });
               } else {
-                 // Fallback if profile is missing
-                 setUser({
+                 // Profile missing - Create it now (Self-healing)
+                 const newUser = {
                    id: session.user.id,
                    email: session.user.email || '',
+                   role: 'viewer' as const,
+                   status: 'active' as const
+                 };
+                 
+                 // Insert into database
+                 const client = supabase;
+                 if (client) {
+                     client.from('profiles').insert([newUser]).then(({ error }) => {
+                       if (error) console.error('Error auto-creating profile:', error);
+                     });
+                 }
+
+                 setUser({
+                   ...newUser,
                    name: session.user.email?.split('@')[0] || 'User',
-                   role: 'viewer',
-                   status: 'active',
                    playerId: undefined
                  });
               }
