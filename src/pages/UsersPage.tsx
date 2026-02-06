@@ -16,7 +16,8 @@ export function UsersPage({ players }: { players: Player[] }) {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refreshUsers();
+    const count = await refreshUsers();
+    alert(`Sync complete. Found ${count} users.`);
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
@@ -137,7 +138,12 @@ export function UsersPage({ players }: { players: Player[] }) {
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-slate-900">User Management</h2>
+        <div>
+            <h2 className="text-2xl font-bold text-slate-900">User Management</h2>
+            <p className="text-xs text-slate-400 mt-1">
+                Debug (v2): Users: {users.length} | Linked: {unifiedList.filter(u => u.type === 'linked').length} | Players: {players.length}
+            </p>
+        </div>
         <div className="flex items-center gap-2">
             <button
                 onClick={handleRefresh}

@@ -16,7 +16,7 @@ interface AuthContextType {
   updateUserStatus: (id: string, status: AppUser['status']) => Promise<void>;
   updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string | null }) => Promise<void>;
   resetPassword: (email: string) => Promise<boolean>;
-  refreshUsers: () => Promise<void>;
+  refreshUsers: () => Promise<number>;
   loading: boolean;
 }
 
@@ -29,17 +29,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Define fetchUsers outside useEffect so it can be exposed
   const fetchUsers = async () => {
+    // Determine if we should fetch: must have supabase and be admin
+    // If user state is not yet loaded but we have a session, we might need to rely on session check?
+    // But user role is needed.
     if (supabase && user?.role === 'admin') {
+      console.log('Fetching users...');
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('*');
+        .select('id, email, role, status, player_id');
         
       if (error) {
         console.error('Error fetching users:', error);
-        return;
+        // Alert admin on error to help debug
+        if (user.id !== 'admin-local') {
+             // alert('Sync Error: Failed to fetch users. ' + error.message);
+        }
+        return 0;
       }
 
       if (profiles) {
+        console.log(`Fetched ${profiles.length} profiles`);
         const mappedUsers: AppUser[] = profiles.map(p => ({
           id: p.id,
           email: p.email,
@@ -49,8 +58,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           playerId: p.player_id
         }));
         setUsers(mappedUsers);
+        return mappedUsers.length;
       }
+    } else {
+        console.log('Skipping fetchUsers: Not admin or no supabase', { role: user?.role });
     }
+    return 0;
   };
 
   // Load initial session
@@ -221,6 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'profiles' }, 
         (payload) => {
+          console.log('Realtime profile update:', payload);
           if (payload.eventType === 'UPDATE') {
             const updatedProfile = payload.new;
             
@@ -239,15 +253,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             // 2. Update users list if we have it
             setUsers(currentUsers => {
-              if (currentUsers.some(u => u.id === updatedProfile.id)) {
+              // Check if user exists in list
+              const exists = currentUsers.some(u => u.id === updatedProfile.id);
+              
+              if (exists) {
                 return currentUsers.map(u => u.id === updatedProfile.id ? {
                   ...u,
                   role: updatedProfile.role,
                   status: updatedProfile.status,
                   playerId: updatedProfile.player_id || undefined
                 } as AppUser : u);
+              } else {
+                // If not in list but we received an update, maybe we should add it?
+                // Or maybe fetchUsers wasn't called yet.
+                // Safest to trigger a fetch if we are admin?
+                // But we can't call fetchUsers easily from here without dependency issues if it wasn't stable.
+                // For now, just return current.
+                return currentUsers;
               }
-              return currentUsers;
             });
           } else if (payload.eventType === 'INSERT') {
             const newProfile = payload.new;
@@ -281,7 +304,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+            console.warn('Profiles subscription status:', status);
+        }
+      });
 
     return () => {
       client.removeChannel(channel);
