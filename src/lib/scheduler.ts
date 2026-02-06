@@ -117,8 +117,6 @@ function findOptimalScheduleForRounds(rounds: string[][][], startDate: string): 
       // or implement a greedy version.
       // For now, let's assume N=8.
   }
-
-  const opponentCounts = new Map<string, number>();
   
   let bestSchedule: Match[] = [];
   let minMaxDiff = Infinity;
