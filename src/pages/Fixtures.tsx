@@ -23,16 +23,35 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
   const [newDate, setNewDate] = useState<string>('');
   const [newStatus, setNewStatus] = useState<Match['status']>('scheduled');
   const [leagueStartDate, setLeagueStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   const scheduledMatches = matches
     .filter(m => m.status !== 'completed')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const handleGenerate = () => {
-    // Filter player objects based on selection
-    const activePlayers = players.filter(p => selectedPlayers.includes(p.id));
-    const newFixtures = generateSchedule(activePlayers, leagueStartDate); // Generate full season (N-1 rounds)
-    setGenerated(newFixtures);
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    
+    // Use setTimeout to allow UI to update with loading state before heavy calculation freezes it
+    setTimeout(() => {
+        try {
+            // Filter player objects based on selection
+            const activePlayers = players.filter(p => selectedPlayers.includes(p.id));
+            if (activePlayers.length < 4) {
+                alert('Please select at least 4 players to generate a schedule.');
+                setIsGenerating(false);
+                return;
+            }
+            
+            const newFixtures = generateSchedule(activePlayers, leagueStartDate); // Generate full season (N-1 rounds)
+            setGenerated(newFixtures);
+        } catch (error) {
+            console.error('Error generating schedule:', error);
+            alert('An error occurred while generating the schedule. Please check the console.');
+        } finally {
+            setIsGenerating(false);
+        }
+    }, 100);
   };
 
   const handleConfirm = () => {
@@ -103,9 +122,17 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
 
         <button 
             onClick={handleGenerate}
-            className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors"
+            disabled={isGenerating}
+            className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
         >
-            Generate Rounds
+            {isGenerating ? (
+                <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Generating...
+                </>
+            ) : (
+                'Generate Rounds'
+            )}
         </button>
 
         {generated.length > 0 && (
