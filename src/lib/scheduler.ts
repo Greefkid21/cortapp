@@ -15,13 +15,18 @@ import { Player, Match } from '../types';
  *      This is trivial to solve optimally.
  */
 export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): Match[] {
-  console.log('Starting Optimized Fairness Search (100 restarts)...');
-  const realPlayerIds = players.map(p => p.id);
-  const n = realPlayerIds.length;
-  
-  // Optimization: Map player IDs to indices 0..N-1 for fast 2D array access
-  const playerToIndex = new Map<string, number>();
-  realPlayerIds.forEach((id, i) => playerToIndex.set(id, i));
+  try {
+    console.log('Starting Optimized Fairness Search (100 restarts)...');
+    if (!players || !Array.isArray(players) || players.length < 2) {
+        throw new Error("Invalid players array provided");
+    }
+
+    const realPlayerIds = players.map(p => p.id);
+    const n = realPlayerIds.length;
+    
+    // Optimization: Map player IDs to indices 0..N-1 for fast 2D array access
+    const playerToIndex = new Map<string, number>();
+    realPlayerIds.forEach((id, i) => playerToIndex.set(id, i));
   
   // Configuration
   // Adaptive strategy:
@@ -64,6 +69,10 @@ export function generateSchedule(players: Player[], startDate: string = new Date
   }
 
   return bestGlobalMatches;
+  } catch (e) {
+      console.error("Scheduler Error:", e);
+      throw e; // Re-throw so worker catches it
+  }
 }
 
 /**
@@ -189,7 +198,7 @@ function findGreedyScheduleForRounds(
         // Evaluate each config locally
         for (const config of matchConfigs) {
              const roundMatches = config.map((matchUp, i) => ({
-                id: `gen-${r}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+                id: `gen-${r}-${i}-${Math.random().toString(36).substring(2, 7)}`,
                 date: dateStr,
                 team1: matchUp[0],
                 team2: matchUp[1],
@@ -202,7 +211,12 @@ function findGreedyScheduleForRounds(
              const { diff, totalCost } = calculateMetrics(tempHistory, playerToIndex, n);
              
              // Weighted score
-             const score = diff * 1000000 + totalCost; 
+             // Handle case where diff/cost are Infinity (e.g. first round)
+             // If diff is Infinity, we treat it as 0 for the first round to allow progress
+             const safeDiff = diff === Infinity ? 0 : diff;
+             const safeCost = totalCost === Infinity ? 0 : totalCost;
+
+             const score = safeDiff * 1000000 + safeCost; 
              if (score < bestConfigScore) {
                  bestConfigScore = score;
                  bestConfig = roundMatches;
@@ -211,6 +225,20 @@ function findGreedyScheduleForRounds(
         
         if (bestConfig) {
             currentMatches.push(...bestConfig);
+        } else {
+            // Fallback: If no valid config found (shouldn't happen with safeDiff logic, but safety first)
+            // Pick the first one
+             const firstConfig = matchConfigs[0];
+             const roundMatches = firstConfig.map((matchUp, i) => ({
+                id: `gen-${r}-${i}-${Math.random().toString(36).substring(2, 7)}`,
+                date: dateStr,
+                team1: matchUp[0],
+                team2: matchUp[1],
+                sets: [],
+                winner: null,
+                status: 'scheduled' as const
+              }));
+              currentMatches.push(...roundMatches);
         }
     }
     
@@ -256,7 +284,7 @@ function findOptimalScheduleForRounds(
 
     for (const config of matchConfigs) {
       const newMatches = config.map((matchUp, i) => ({
-        id: `gen-${roundIdx}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+        id: `gen-${roundIdx}-${i}-${Math.random().toString(36).substring(2, 7)}`,
         date: dateStr,
         team1: matchUp[0],
         team2: matchUp[1],
