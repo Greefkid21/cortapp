@@ -228,7 +228,8 @@ function calculateMatchCost(team1: string[], team2: string[], getCount: (p1: str
     for (const p2 of team2) {
       const count = getCount(p1, p2);
       // Cubic penalty to strongly discourage 3+ repeats
-      cost += Math.pow(count, 3); 
+      // We bump this to power 5 to make '3' repeats prohibitively expensive compared to '2'.
+      cost += Math.pow(count, 5); 
     }
   }
   return cost;
