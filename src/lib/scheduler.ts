@@ -1,5 +1,6 @@
 import { Player, Match } from '../types';
 
+// Force git update
 /**
  * Generates a schedule where:
  * 1. Each player partners with every other player exactly once (using Polygon Method).
