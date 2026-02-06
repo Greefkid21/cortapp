@@ -26,6 +26,8 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
 
   const canPost = !!user;
 
+  // Ensure robust player name lookup
+
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
 
   const handleSend = async () => {
