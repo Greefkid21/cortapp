@@ -514,6 +514,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
       }
       
+      // Double check by re-fetching (to catch AFTER triggers)
+      const { data: verifyData } = await supabase
+          .from('profiles')
+          .select('player_id, role')
+          .eq('id', id)
+          .single();
+
+      if (verifyData) {
+          let doubleCheckMismatch = false;
+          if (updates.role && verifyData.role !== updates.role) doubleCheckMismatch = true;
+          if (updates.playerId !== undefined && verifyData.player_id !== updates.playerId) doubleCheckMismatch = true;
+          
+          if (doubleCheckMismatch) {
+              console.warn('Double-check mismatch:', { expected: updates, got: verifyData });
+              alert('Update warning: The database initially accepted the update, but a subsequent check shows the value reverted. This is likely due to a database trigger or conflicting rule.');
+              // Revert local state
+              setUsers(prev => prev.map(u => (u.id === id ? { 
+                  ...u, 
+                  role: verifyData.role,
+                  playerId: verifyData.player_id || undefined,
+                  status: u.status // verifyData doesn't have status, keep old
+              } : u)));
+              return;
+          }
+      }
+
       setUsers(prev => prev.map(u => (u.id === id ? { 
           ...u, 
           role: updates.role || u.role,
