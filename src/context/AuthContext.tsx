@@ -481,11 +481,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (updates.role) updateData.role = updates.role;
       if (updates.playerId !== undefined) updateData.player_id = updates.playerId; // Allow null to unlink
 
-      const { error } = await supabase.from('profiles').update(updateData).eq('id', id);
+      const { data, error } = await supabase.from('profiles').update(updateData).eq('id', id).select();
 
       if (error) {
         console.error('Error updating user profile:', error);
         throw error;
+      }
+
+      if (!data || data.length === 0) {
+          console.warn('Update succeeded but no data returned. Possible RLS blocking.');
+          // If RLS blocks the update, we shouldn't update local state blindly.
+          // However, throwing might break UI flow. Let's log and alert.
+          alert('Update failed: You might not have permission to update this user. Please check database policies.');
+          return;
       }
       
       setUsers(prev => prev.map(u => (u.id === id ? { 
