@@ -18,7 +18,7 @@ import { Player, Match } from '../types';
 export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): Match[] {
   console.log('Starting Exhaustive Fairness Search (500 restarts)...');
   const realPlayerIds = players.map(p => p.id);
-  let n = realPlayerIds.length;
+  const n = realPlayerIds.length;
   
   // Handle odd number of players
   if (n % 2 !== 0) {
