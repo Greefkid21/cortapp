@@ -33,7 +33,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Determine if we should fetch: must have supabase and be admin
     // If user state is not yet loaded but we have a session, we might need to rely on session check?
     // But user role is needed.
-    if (supabase && user?.role === 'admin') {
+    if (!supabase) return 0;
+    
+    if (user?.role === 'admin') {
       console.log('Fetching users...');
       const { data: profiles, error } = await supabase
         .from('profiles')
@@ -80,11 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (session?.user) {
             sessionFound = true;
             // Fetch profile
-            const { data: profile } = await supabase
+            const { data: profile, error } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', session.user.id)
               .single();
+              
+            if (error && error.code !== 'PGRST116') {
+                console.error('Error fetching profile:', error);
+                // Do not downgrade to viewer if it's a genuine error (not just missing)
+            }
               
             if (profile) {
               setUser({
@@ -95,8 +102,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 status: profile.status,
                 playerId: profile.player_id
               });
-            } else {
-              // Profile missing - Create it now (Self-healing)
+            } else if (error && error.code === 'PGRST116') {
+              // Only create new profile if it genuinely doesn't exist (PGRST116)
+              console.log('Profile not found, creating new viewer profile...');
               const newUser = {
                 id: session.user.id,
                 email: session.user.email || '',
@@ -123,11 +131,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Listen for auth changes
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (session?.user && supabase) {
-              const { data: profile } = await supabase
+              const { data: profile, error } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', session.user.id)
                 .single();
+                
+              if (error && error.code !== 'PGRST116') {
+                  console.error('Error fetching profile (onAuthStateChange):', error);
+              }
                 
               if (profile) {
                 setUser({
@@ -138,8 +150,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   status: profile.status,
                   playerId: profile.player_id
                 });
-              } else {
-                 // Profile missing - Create it now (Self-healing)
+              } else if (error && error.code === 'PGRST116') {
+                 // Only create new profile if it genuinely doesn't exist
+                 console.log('Profile not found (auth change), creating new viewer profile...');
                  const newUser = {
                    id: session.user.id,
                    email: session.user.email || '',
