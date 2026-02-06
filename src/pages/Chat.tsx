@@ -24,11 +24,6 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
     }
   }, [matchId, user, messages.length]); // Re-run when message count changes
 
-  const participants = useMemo(() => {
-    if (!match) return [];
-    return [...match.team1, ...match.team2];
-  }, [match]);
-
   const canPost = !!user;
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
