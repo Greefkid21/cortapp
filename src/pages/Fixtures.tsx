@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Player, Match } from '../types';
-import { generateSchedule } from '../lib/scheduler';
 import { Calendar, Play, Shuffle, MessageSquare } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -29,29 +28,41 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
     .filter(m => m.status !== 'completed')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     setIsGenerating(true);
     
-    // Use setTimeout to allow UI to update with loading state before heavy calculation freezes it
-    setTimeout(() => {
-        try {
-            // Filter player objects based on selection
-            const activePlayers = players.filter(p => selectedPlayers.includes(p.id));
-            if (activePlayers.length < 4) {
-                alert('Please select at least 4 players to generate a schedule.');
-                setIsGenerating(false);
-                return;
-            }
-            
-            const newFixtures = generateSchedule(activePlayers, leagueStartDate); // Generate full season (N-1 rounds)
-            setGenerated(newFixtures);
-        } catch (error) {
-            console.error('Error generating schedule:', error);
+    // Use a Web Worker to run the schedule generation off the main thread
+    const worker = new Worker(new URL('../lib/scheduler.worker.ts', import.meta.url), { type: 'module' });
+    
+    worker.onmessage = (e) => {
+        const { type, payload } = e.data;
+        if (type === 'SUCCESS') {
+            setGenerated(payload);
+        } else {
+            console.error('Error generating schedule:', payload);
             alert('An error occurred while generating the schedule. Please check the console.');
-        } finally {
-            setIsGenerating(false);
         }
-    }, 100);
+        setIsGenerating(false);
+        worker.terminate();
+    };
+
+    worker.onerror = (error) => {
+        console.error('Worker error:', error);
+        alert('A worker error occurred while generating the schedule.');
+        setIsGenerating(false);
+        worker.terminate();
+    };
+
+    // Filter player objects based on selection
+    const activePlayers = players.filter(p => selectedPlayers.includes(p.id));
+    if (activePlayers.length < 4) {
+        alert('Please select at least 4 players to generate a schedule.');
+        setIsGenerating(false);
+        worker.terminate();
+        return;
+    }
+    
+    worker.postMessage({ players: activePlayers, startDate: leagueStartDate });
   };
 
   const handleConfirm = () => {
