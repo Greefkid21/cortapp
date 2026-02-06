@@ -182,7 +182,11 @@ function findGreedyScheduleForRounds(
     playerToIndex: Map<string, number>,
     n: number
 ): { matches: Match[], cost: number } {
-    let currentMatches: Match[] = [];
+    // Generate matches for this round
+    const currentMatches: Match[] = [];
+    
+    // We need to keep track of which players have played in this round
+    const playersPlayedInRound = new Set<string>();
     
     for (let r = 0; r < rounds.length; r++) {
         const pairs = rounds[r];
