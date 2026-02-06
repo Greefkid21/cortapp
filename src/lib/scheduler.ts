@@ -24,8 +24,11 @@ export function generateSchedule(players: Player[], startDate: string = new Date
   realPlayerIds.forEach((id, i) => playerToIndex.set(id, i));
   
   // Configuration
-  // Reduced to 100 for better mobile performance while maintaining good fairness
-  const RESTARTS = n <= 8 ? 100 : 20; 
+  // Adaptive strategy:
+  // N <= 8: Exhaustive Search (Best quality, 3^7 = 2187 checks * 100 restarts)
+  // N > 8: Greedy Search (Good quality, avoids exponential explosion)
+  const USE_GREEDY = n > 8;
+  const RESTARTS = USE_GREEDY ? 200 : 100; // More restarts for greedy to explore better
   
   let bestGlobalMatches: Match[] = [];
   let bestGlobalScore = Infinity;
@@ -41,8 +44,13 @@ export function generateSchedule(players: Player[], startDate: string = new Date
     // 2. Generate Rounds of Pairs (Polygon Method)
     const roundsOfPairs = generatePolygonRounds(shuffledIds);
 
-    // 3. Exhaustive Search for Best Matchups for this factorization
-    const result = findOptimalScheduleForRounds(roundsOfPairs, startDate, playerToIndex, n);
+    // 3. Search for Best Matchups
+    let result;
+    if (USE_GREEDY) {
+        result = findGreedyScheduleForRounds(roundsOfPairs, startDate, playerToIndex, n);
+    } else {
+        result = findOptimalScheduleForRounds(roundsOfPairs, startDate, playerToIndex, n);
+    }
     
     // 4. Evaluate Final Schedule Fairness
     const score = evaluateScheduleFairness(result.matches, playerToIndex, n);
@@ -51,7 +59,6 @@ export function generateSchedule(players: Player[], startDate: string = new Date
       bestGlobalScore = score;
       bestGlobalMatches = result.matches;
       
-      // If we found a "perfect" schedule (range <= 1), we can stop early?
       if (score <= 1.0) break;
     }
   }
@@ -108,39 +115,46 @@ function generatePolygonRounds(players: string[]): string[][][] {
 }
 
 /**
- * Given a list of pairs for a round (e.g. 4 pairs for 8 players),
- * generate all possible ways to match them up against each other.
- * 
- * For 4 pairs [A, B, C, D]:
- * 1. A vs B, C vs D
- * 2. A vs C, B vs D
- * 3. A vs D, B vs C
- * 
- * Returns array of configurations, where each configuration is a list of matchups (team1, team2).
+ * Given a list of pairs for a round, generate possible matchup configurations.
+ * Handles even and odd numbers of pairs (odd = one pair gets a bye).
  */
 function generateMatchConfigurations(pairs: string[][]): string[][][][] {
-  // Base case: 2 pairs -> 1 config: [pair0 vs pair1]
+  // Base case: 0 or 1 pair -> No matches possible
+  if (pairs.length < 2) {
+    return [[]]; 
+  }
+  
+  // Base case: 2 pairs -> 1 match
   if (pairs.length === 2) {
     return [[ [pairs[0], pairs[1]] ]];
   }
   
-  // Recursive case for N pairs:
-  // Fix first pair pairs[0].
-  // Iterate through all other pairs k to be its opponent.
-  // Recurse on remaining pairs.
+  // If odd number of pairs, we must pick one to sit out (Bye)
+  if (pairs.length % 2 !== 0) {
+    const results: string[][][][] = [];
+    for (let i = 0; i < pairs.length; i++) {
+        // Pair i is the bye
+        const remaining = pairs.filter((_, idx) => idx !== i);
+        const subConfigs = generateMatchConfigurations(remaining);
+        // We don't record the bye in the match list, so just pass through subConfigs
+        for (const sub of subConfigs) {
+            results.push(sub);
+        }
+    }
+    return results;
+  }
   
+  // Even number of pairs > 2
+  // Fix first pair, iterate through opponents
   const results: string[][][][] = [];
   const first = pairs[0];
   
   for (let i = 1; i < pairs.length; i++) {
     const opponent = pairs[i];
-    
-    // Remaining pairs excluding first and opponent
     const remaining = pairs.filter((_, idx) => idx !== 0 && idx !== i);
     
     if (remaining.length === 0) {
-      // Should be covered by base case, but if we had odd pairs (impossible here), handle it
-      results.push([[first, opponent]]);
+       results.push([[first, opponent]]);
     } else {
       const subConfigs = generateMatchConfigurations(remaining);
       for (const subConfig of subConfigs) {
@@ -150,6 +164,58 @@ function generateMatchConfigurations(pairs: string[][]): string[][][][] {
   }
   
   return results;
+}
+
+function findGreedyScheduleForRounds(
+    rounds: string[][][], 
+    startDate: string,
+    playerToIndex: Map<string, number>,
+    n: number
+): { matches: Match[], cost: number } {
+    let currentMatches: Match[] = [];
+    
+    for (let r = 0; r < rounds.length; r++) {
+        const pairs = rounds[r];
+        const matchConfigs = generateMatchConfigurations(pairs);
+        
+        let bestConfig: Match[] | null = null;
+        let bestConfigScore = Infinity;
+        
+        // Calculate date for this round
+        const roundDate = new Date(startDate);
+        roundDate.setDate(roundDate.getDate() + (r * 7));
+        const dateStr = roundDate.toISOString().split('T')[0];
+
+        // Evaluate each config locally
+        for (const config of matchConfigs) {
+             const roundMatches = config.map((matchUp, i) => ({
+                id: `gen-${r}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+                date: dateStr,
+                team1: matchUp[0],
+                team2: matchUp[1],
+                sets: [],
+                winner: null,
+                status: 'scheduled' as const
+              }));
+
+             const tempHistory = [...currentMatches, ...roundMatches];
+             const { diff, totalCost } = calculateMetrics(tempHistory, playerToIndex, n);
+             
+             // Weighted score
+             const score = diff * 1000000 + totalCost; 
+             if (score < bestConfigScore) {
+                 bestConfigScore = score;
+                 bestConfig = roundMatches;
+             }
+        }
+        
+        if (bestConfig) {
+            currentMatches.push(...bestConfig);
+        }
+    }
+    
+    const { totalCost } = calculateMetrics(currentMatches, playerToIndex, n);
+    return { matches: currentMatches, cost: totalCost };
 }
 
 function findOptimalScheduleForRounds(
