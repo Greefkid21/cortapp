@@ -16,6 +16,7 @@ import { Player, Match } from '../types';
  *      This is trivial to solve optimally.
  */
 export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): Match[] {
+  console.log('Starting Exhaustive Fairness Search (500 restarts)...');
   const realPlayerIds = players.map(p => p.id);
   let n = realPlayerIds.length;
   
