@@ -490,9 +490,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!data || data.length === 0) {
           console.warn('Update succeeded but no data returned. Possible RLS blocking.');
-          // If RLS blocks the update, we shouldn't update local state blindly.
-          // However, throwing might break UI flow. Let's log and alert.
           alert('Update failed: You might not have permission to update this user. Please check database policies.');
+          return;
+      }
+
+      // Verify that the updates were actually applied
+      const updatedRecord = data[0];
+      let mismatch = false;
+      if (updates.role && updatedRecord.role !== updates.role) mismatch = true;
+      if (updates.playerId !== undefined && updatedRecord.player_id !== updates.playerId) mismatch = true;
+
+      if (mismatch) {
+          console.warn('Update mismatch:', { expected: updates, got: updatedRecord });
+          alert('Update warning: The database accepted the update but the values did not change. This might be due to database triggers or permissions.');
+          // We should still update local state to match DB or revert? 
+          // Reverting to DB state is safer.
+          setUsers(prev => prev.map(u => (u.id === id ? { 
+              ...u, 
+              role: updatedRecord.role,
+              playerId: updatedRecord.player_id || undefined,
+              status: updatedRecord.status
+          } : u)));
           return;
       }
       
