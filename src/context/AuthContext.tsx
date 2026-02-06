@@ -562,6 +562,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Double check by re-fetching (to catch AFTER triggers)
+      // Wait a small delay to ensure any async triggers have fired
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const { data: verifyData } = await supabase
           .from('profiles')
           .select('player_id, role')
@@ -575,7 +578,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (doubleCheckMismatch) {
               console.warn('Double-check mismatch:', { expected: updates, got: verifyData });
-              alert('Update warning: The database initially accepted the update, but a subsequent check shows the value reverted. This is likely due to a database trigger or conflicting rule.');
+              alert(`Update warning: The database initially accepted the update, but a subsequent check shows the value reverted.\n\nExpected PlayerID: ${updates.playerId}\nActual PlayerID: ${verifyData.player_id}\n\nThis is likely due to a database trigger or conflicting rule.`);
               // Revert local state
               setUsers(prev => prev.map(u => (u.id === id ? { 
                   ...u, 
