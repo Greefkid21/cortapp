@@ -191,6 +191,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchUsers();
   }, [user]);
 
+  // Real-time subscription for profile updates
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+
+    const channel = client
+      .channel('public:profiles')
+      .on('postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'profiles' }, 
+        (payload) => {
+          const updatedProfile = payload.new;
+          
+          // 1. Update current user if it matches
+          setUser((currentUser: AppUser | null) => {
+            if (currentUser?.id === updatedProfile.id) {
+              return {
+                ...currentUser,
+                role: updatedProfile.role,
+                status: updatedProfile.status,
+                playerId: updatedProfile.player_id
+              } as AppUser;
+            }
+            return currentUser;
+          });
+
+          // 2. Update users list if we have it (e.g. we are admin)
+          setUsers(currentUsers => {
+            if (currentUsers.some(u => u.id === updatedProfile.id)) {
+              return currentUsers.map(u => u.id === updatedProfile.id ? {
+                ...u,
+                role: updatedProfile.role,
+                status: updatedProfile.status,
+                playerId: updatedProfile.player_id
+              } as AppUser : u);
+            }
+            return currentUsers;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, []);
+
   const login = async (email: string, password?: string) => {
     // Special backdoor for admin123 - allow if password matches, regardless of email
     if (password === 'admin123' || email === 'admin123') {
