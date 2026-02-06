@@ -230,7 +230,107 @@ export function UsersPage({ players }: { players: Player[] }) {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      {/* Mobile View: Cards */}
+      <div className="md:hidden space-y-4">
+        {unifiedList.map((item) => (
+          <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    item.type === 'player_only' ? 'bg-slate-100 text-slate-300' : 'bg-primary/10 text-primary'
+                }`}>
+                    <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900 flex items-center gap-2">
+                    {item.name}
+                    {item.type === 'linked' && (
+                        <div title="Linked to Player">
+                            <LinkIcon className="w-3 h-3 text-primary" />
+                        </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {item.email || 'No email linked'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                 {item.role && (
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      item.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+                    }`}>
+                      <Shield className="w-3 h-3" />
+                      {item.role === 'admin' ? 'Admin' : 'Viewer'}
+                    </span>
+                 )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-50 pt-3">
+                <div>
+                  {item.status ? (
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        item.status === 'active' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {item.status === 'active' ? 'Active' : 'Invited'}
+                      </span>
+                  ) : (
+                      <span className="flex items-center gap-1 text-slate-400 text-xs bg-slate-100 px-2 py-0.5 rounded-full w-fit">
+                          <AlertCircle className="w-3 h-3" /> No Access
+                      </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    {item.type === 'player_only' ? (
+                        <button
+                            onClick={() => item.player && startLinkPlayer(item.player)}
+                            className="text-primary hover:text-teal-700 p-2 hover:bg-primary/5 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"
+                        >
+                            <UserPlus className="w-3 h-3" /> Grant Access
+                        </button>
+                    ) : (
+                        <>
+                            {item.status === 'invited' && item.user && (
+                            <button
+                                onClick={() => updateUserStatus(item.user!.id, 'active')}
+                                className="text-green-600 hover:text-green-700 p-2 hover:bg-green-50 rounded-lg transition-colors text-xs font-bold"
+                                title="Activate User"
+                            >
+                                Activate
+                            </button>
+                            )}
+                            
+                            {item.user && (
+                                <button
+                                    onClick={() => startEdit(item.user!)}
+                                    className="text-slate-400 hover:text-primary p-2 hover:bg-slate-50 rounded-lg transition-colors"
+                                    title="Edit User"
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                </button>
+                            )}
+
+                            {item.role !== 'admin' && item.user && (
+                            <button 
+                                onClick={() => deleteUser(item.user!.id)}
+                                className="text-slate-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Remove User"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop View: Table */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
