@@ -16,6 +16,7 @@ interface AuthContextType {
   updateUserStatus: (id: string, status: AppUser['status']) => Promise<void>;
   updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string | null }) => Promise<void>;
   resetPassword: (email: string) => Promise<boolean>;
+  refreshUsers: () => Promise<void>;
   loading: boolean;
 }
 
@@ -25,6 +26,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Define fetchUsers outside useEffect so it can be exposed
+  const fetchUsers = async () => {
+    if (supabase && user?.role === 'admin') {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*');
+        
+      if (error) {
+        console.error('Error fetching users:', error);
+        return;
+      }
+
+      if (profiles) {
+        const mappedUsers: AppUser[] = profiles.map(p => ({
+          id: p.id,
+          email: p.email,
+          name: p.email.split('@')[0],
+          role: p.role,
+          status: p.status,
+          playerId: p.player_id
+        }));
+        setUsers(mappedUsers);
+      }
+    }
+  };
 
   // Load initial session
   useEffect(() => {
@@ -168,27 +195,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch all users (for admin)
   useEffect(() => {
-    const fetchUsers = async () => {
-      if (supabase && user?.role === 'admin') {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('*');
-          
-        if (profiles) {
-          const mappedUsers: AppUser[] = profiles.map(p => ({
-            id: p.id,
-            email: p.email,
-            name: p.email.split('@')[0],
-            role: p.role,
-            status: p.status,
-            playerId: p.player_id
-          }));
-          setUsers(mappedUsers);
-        }
+    fetchUsers();
+  }, [user]);
+
+  // Auto-refresh on window focus (for mobile switching)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user?.role === 'admin') {
+        console.log('App focused, refreshing users...');
+        fetchUsers();
       }
     };
-    
-    fetchUsers();
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [user]);
 
   // Real-time subscription for profile updates
@@ -581,7 +601,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = user?.role === 'admin';
  
   return (
-    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, loading }}>
       {children}
     </AuthContext.Provider>
   );

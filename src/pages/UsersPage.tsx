@@ -1,12 +1,24 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Player, AppUser } from '../types';
-import { UserPlus, Trash2, Shield, User, Edit2, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import { UserPlus, Trash2, Shield, User, Edit2, Link as LinkIcon, AlertCircle, RefreshCw } from 'lucide-react';
 
 export function UsersPage({ players }: { players: Player[] }) {
-  const { users, inviteUser, deleteUser, isAdmin, updateUserStatus, updateUserProfile } = useAuth();
+  const { users, inviteUser, deleteUser, isAdmin, updateUserStatus, updateUserProfile, refreshUsers } = useAuth();
   const [isInviting, setIsInviting] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null); // For editing existing users
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Auto-refresh on mount to ensure fresh data
+  useEffect(() => {
+    refreshUsers();
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshUsers();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<AppUser['role']>('viewer');
@@ -126,18 +138,27 @@ export function UsersPage({ players }: { players: Player[] }) {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-900">User Management</h2>
-        <button
-          onClick={() => {
-              setEditingUser(null);
-              setInviteEmail('');
-              setInviteRole('viewer');
-              setInvitePlayerId(undefined);
-              setIsInviting(true);
-          }}
-          className="bg-primary text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-teal-700 transition-colors"
-        >
-          <UserPlus className="w-5 h-5" /> Invite User
-        </button>
+        <div className="flex items-center gap-2">
+            <button
+                onClick={handleRefresh}
+                className="bg-slate-100 text-slate-600 px-3 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-200 transition-colors"
+                title="Refresh List"
+            >
+                <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+            onClick={() => {
+                setEditingUser(null);
+                setInviteEmail('');
+                setInviteRole('viewer');
+                setInvitePlayerId(undefined);
+                setIsInviting(true);
+            }}
+            className="bg-primary text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-teal-700 transition-colors"
+            >
+            <UserPlus className="w-5 h-5" /> Invite User
+            </button>
+        </div>
       </div>
 
       {isInviting && (
