@@ -4,10 +4,11 @@ import { Player, AppUser } from '../types';
 import { UserPlus, Trash2, Shield, User, Edit2, Link as LinkIcon, AlertCircle, RefreshCw } from 'lucide-react';
 
 export function UsersPage({ players }: { players: Player[] }) {
-  const { users, inviteUser, deleteUser, isAdmin, updateUserStatus, updateUserProfile, refreshUsers } = useAuth();
+  const { users, inviteUser, deleteUser, isAdmin, updateUserStatus, updateUserProfile, refreshUsers, checkUserDbValue } = useAuth();
   const [isInviting, setIsInviting] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null); // For editing existing users
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Auto-refresh on mount to ensure fresh data
   useEffect(() => {
@@ -153,6 +154,12 @@ export function UsersPage({ players }: { players: Player[] }) {
                 <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="bg-slate-100 text-slate-600 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-colors text-xs"
+            >
+                {showDebug ? 'Hide' : 'Debug'}
+            </button>
+            <button
             onClick={() => {
                 setEditingUser(null);
                 setInviteEmail('');
@@ -166,6 +173,51 @@ export function UsersPage({ players }: { players: Player[] }) {
             </button>
         </div>
       </div>
+
+      {showDebug && (
+        <div className="mb-6 p-4 bg-slate-800 rounded-lg overflow-x-auto">
+          <h3 className="text-sm font-bold text-white mb-2">Diagnostic Data</h3>
+          <table className="w-full text-xs text-left text-slate-300">
+            <thead>
+              <tr>
+                <th className="p-1 border-b border-slate-700">ID</th>
+                <th className="p-1 border-b border-slate-700">Email</th>
+                <th className="p-1 border-b border-slate-700">Role</th>
+                <th className="p-1 border-b border-slate-700">Player ID (DB)</th>
+                <th className="p-1 border-b border-slate-700">Status</th>
+                <th className="p-1 border-b border-slate-700">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id} className="border-b border-slate-700/50">
+                  <td className="p-1 font-mono">{u.id}</td>
+                  <td className="p-1">{u.email}</td>
+                  <td className="p-1">{u.role}</td>
+                  <td className={`p-1 font-mono ${u.playerId ? 'text-green-400' : 'text-red-400'}`}>
+                    {u.playerId || 'NULL'}
+                  </td>
+                  <td className="p-1">{u.status}</td>
+                  <td className="p-1">
+                    <button 
+                        onClick={async () => {
+                            const data = await checkUserDbValue(u.id);
+                            alert(`Direct DB Fetch Result for ${u.email}:\n${JSON.stringify(data, null, 2)}`);
+                        }}
+                        className="bg-blue-600 text-white px-2 py-1 rounded text-[10px]"
+                    >
+                        Check DB
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-2 text-xs text-slate-400">
+            Total Users: {users.length} | Linked in UI: {unifiedList.filter(u => u.type === 'linked').length}
+          </div>
+        </div>
+      )}
 
       {isInviting && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

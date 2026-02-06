@@ -17,6 +17,7 @@ interface AuthContextType {
   updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string | null }) => Promise<void>;
   resetPassword: (email: string) => Promise<boolean>;
   refreshUsers: () => Promise<number>;
+  checkUserDbValue: (id: string) => Promise<any>;
   loading: boolean;
 }
 
@@ -629,9 +630,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const isAdmin = user?.role === 'admin';
- 
+
+  const checkUserDbValue = async (id: string) => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+    if (error) {
+        console.error('checkUserDbValue error:', error);
+        return { error: error.message };
+    }
+    return data;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, checkUserDbValue, loading }}>
       {children}
     </AuthContext.Provider>
   );
