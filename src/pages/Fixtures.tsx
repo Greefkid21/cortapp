@@ -48,6 +48,7 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
 
     worker.onerror = (error) => {
         console.error('Worker error:', error);
+        // Extract error message for better debugging
         const errorMessage = error instanceof ErrorEvent ? error.message : 'Unknown error';
         alert(`A worker error occurred: ${errorMessage}. Check console for details.`);
         setIsGenerating(false);

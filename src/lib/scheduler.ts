@@ -16,6 +16,7 @@ import { Player, Match } from '../types';
  */
 export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): Match[] {
   try {
+    // Start optimization process
     console.log('Starting Optimized Fairness Search (100 restarts)...');
     if (!players || !Array.isArray(players) || players.length < 2) {
         throw new Error("Invalid players array provided");
