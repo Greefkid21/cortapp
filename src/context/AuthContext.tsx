@@ -199,35 +199,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const channel = client
       .channel('public:profiles')
       .on('postgres_changes', 
-        { event: 'UPDATE', schema: 'public', table: 'profiles' }, 
+        { event: '*', schema: 'public', table: 'profiles' }, 
         (payload) => {
-          const updatedProfile = payload.new;
-          
-          // 1. Update current user if it matches
-          setUser((currentUser: AppUser | null) => {
-            if (currentUser?.id === updatedProfile.id) {
-              return {
-                ...currentUser,
-                role: updatedProfile.role,
-                status: updatedProfile.status,
-                playerId: updatedProfile.player_id
-              } as AppUser;
-            }
-            return currentUser;
-          });
+          if (payload.eventType === 'UPDATE') {
+            const updatedProfile = payload.new;
+            
+            // 1. Update current user if it matches
+            setUser((currentUser: AppUser | null) => {
+              if (currentUser?.id === updatedProfile.id) {
+                return {
+                  ...currentUser,
+                  role: updatedProfile.role,
+                  status: updatedProfile.status,
+                  playerId: updatedProfile.player_id || undefined
+                } as AppUser;
+              }
+              return currentUser;
+            });
 
-          // 2. Update users list if we have it (e.g. we are admin)
-          setUsers(currentUsers => {
-            if (currentUsers.some(u => u.id === updatedProfile.id)) {
-              return currentUsers.map(u => u.id === updatedProfile.id ? {
-                ...u,
-                role: updatedProfile.role,
-                status: updatedProfile.status,
-                playerId: updatedProfile.player_id
-              } as AppUser : u);
-            }
-            return currentUsers;
-          });
+            // 2. Update users list if we have it
+            setUsers(currentUsers => {
+              if (currentUsers.some(u => u.id === updatedProfile.id)) {
+                return currentUsers.map(u => u.id === updatedProfile.id ? {
+                  ...u,
+                  role: updatedProfile.role,
+                  status: updatedProfile.status,
+                  playerId: updatedProfile.player_id || undefined
+                } as AppUser : u);
+              }
+              return currentUsers;
+            });
+          } else if (payload.eventType === 'INSERT') {
+            const newProfile = payload.new;
+            const newUser: AppUser = {
+              id: newProfile.id,
+              email: newProfile.email,
+              name: newProfile.email?.split('@')[0] || 'User',
+              role: newProfile.role,
+              status: newProfile.status,
+              playerId: newProfile.player_id || undefined
+            };
+            
+            setUsers(currentUsers => {
+              if (!currentUsers.some(u => u.id === newUser.id)) {
+                return [...currentUsers, newUser];
+              }
+              return currentUsers;
+            });
+          } else if (payload.eventType === 'DELETE') {
+             const deletedId = payload.old.id;
+             setUsers(currentUsers => currentUsers.filter(u => u.id !== deletedId));
+             
+             // If current user is deleted, logout? Maybe safer to let the session check handle it.
+             // But we can update local state if needed.
+             setUser((currentUser: AppUser | null) => {
+                if (currentUser?.id === deletedId) {
+                    return null;
+                }
+                return currentUser;
+             });
+          }
         }
       )
       .subscribe();
