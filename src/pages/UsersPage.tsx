@@ -286,16 +286,16 @@ export function UsersPage({ players }: { players: Player[] }) {
                     {item.type === 'player_only' ? (
                         <button
                             onClick={() => item.player && startLinkPlayer(item.player)}
-                            className="text-primary hover:text-teal-700 p-2 hover:bg-primary/5 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"
+                            className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 text-primary rounded-lg font-bold text-xs hover:bg-primary/20 transition-colors"
                         >
-                            <UserPlus className="w-3 h-3" /> Grant Access
+                            <UserPlus className="w-3.5 h-3.5" /> Grant Access
                         </button>
                     ) : (
                         <>
                             {item.status === 'invited' && item.user && (
                             <button
                                 onClick={() => updateUserStatus(item.user!.id, 'active')}
-                                className="text-green-600 hover:text-green-700 p-2 hover:bg-green-50 rounded-lg transition-colors text-xs font-bold"
+                                className="flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg font-bold text-xs hover:bg-green-100 transition-colors"
                                 title="Activate User"
                             >
                                 Activate
@@ -305,20 +305,20 @@ export function UsersPage({ players }: { players: Player[] }) {
                             {item.user && (
                                 <button
                                     onClick={() => startEdit(item.user!)}
-                                    className="text-slate-400 hover:text-primary p-2 hover:bg-slate-50 rounded-lg transition-colors"
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-200 transition-colors"
                                     title="Edit User"
                                 >
-                                    <Edit2 className="w-4 h-4" />
+                                    <Edit2 className="w-3.5 h-3.5" /> Edit
                                 </button>
                             )}
 
                             {item.role !== 'admin' && item.user && (
                             <button 
                                 onClick={() => deleteUser(item.user!.id)}
-                                className="text-slate-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 rounded-lg font-bold text-xs hover:bg-red-100 transition-colors"
                                 title="Remove User"
                             >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" /> Remove
                             </button>
                             )}
                         </>
