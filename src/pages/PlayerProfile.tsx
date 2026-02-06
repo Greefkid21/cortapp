@@ -1,7 +1,9 @@
 import { useParams, Link } from 'react-router-dom';
 import { Player, Match } from '../types';
-import { Trophy, TrendingUp, ArrowLeft } from 'lucide-react';
-import { useMemo } from 'react';
+import { Trophy, TrendingUp, ArrowLeft, Camera, Loader2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface PlayerProfileProps {
   players: Player[];
@@ -11,6 +13,46 @@ interface PlayerProfileProps {
 export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   const { id } = useParams<{ id: string }>();
   const player = players.find(p => p.id === id);
+  const { user } = useAuth();
+  const [uploading, setUploading] = useState(false);
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0 || !player) return;
+    
+    try {
+      setUploading(true);
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${player.id}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+      
+      if (!supabase) throw new Error('Supabase not configured');
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('players')
+        .update({ avatar: publicUrl })
+        .eq('id', player.id);
+
+      if (updateError) throw updateError;
+
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      alert('Error uploading avatar: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // 1. Get all matches involving this player
   const playerMatches = useMemo(() => {
@@ -74,11 +116,28 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
 
       {/* Profile Header */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center gap-6">
-        <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-3xl overflow-hidden border-4 border-slate-50">
+        <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-3xl overflow-hidden border-4 border-slate-50 relative group">
           {player.avatar ? (
             <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" />
           ) : (
             <span>{player.name.charAt(0)}</span>
+          )}
+          
+          {user?.playerId === player.id && (
+            <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+              {uploading ? (
+                <Loader2 className="w-6 h-6 text-white animate-spin" />
+              ) : (
+                <Camera className="w-6 h-6 text-white" />
+              )}
+              <input 
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                onChange={handleAvatarUpload}
+                disabled={uploading}
+              />
+            </label>
           )}
         </div>
         <div className="text-center sm:text-left space-y-2">

@@ -10,7 +10,7 @@ export function UsersPage({ players }: { players: Player[] }) {
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<AppUser['role']>('viewer');
-  const [invitePlayerId, setInvitePlayerId] = useState<string | undefined>(undefined);
+  const [invitePlayerId, setInvitePlayerId] = useState<string | undefined | null>(undefined);
 
   // Unified list of Users and Players
   const unifiedList = useMemo(() => {
@@ -107,7 +107,7 @@ export function UsersPage({ players }: { players: Player[] }) {
     } else {
         // Invite new user
         if (inviteEmail.trim()) {
-            await inviteUser(inviteEmail, inviteRole, invitePlayerId);
+            await inviteUser(inviteEmail, inviteRole, invitePlayerId || undefined);
         }
     }
     
@@ -200,7 +200,7 @@ export function UsersPage({ players }: { players: Player[] }) {
                 <label className="text-sm font-bold text-slate-700">Link to Player (optional)</label>
                 <select
                   value={invitePlayerId || ''}
-                  onChange={(e) => setInvitePlayerId(e.target.value || undefined)}
+                  onChange={(e) => setInvitePlayerId(e.target.value || null)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mt-1 focus:ring-2 focus:ring-primary outline-none"
                 >
                   <option value="">No player link</option>

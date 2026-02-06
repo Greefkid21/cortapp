@@ -14,7 +14,7 @@ interface AuthContextType {
   inviteUser: (email: string, role: AppUser['role'], playerId?: string) => Promise<{ success: boolean; emailSent: boolean; message?: string }>;
   deleteUser: (id: string) => Promise<void>;
   updateUserStatus: (id: string, status: AppUser['status']) => Promise<void>;
-  updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string }) => Promise<void>;
+  updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string | null }) => Promise<void>;
   resetPassword: (email: string) => Promise<boolean>;
   loading: boolean;
 }
@@ -398,18 +398,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateUserProfile = async (id: string, updates: { role?: AppUser['role'], playerId?: string }) => {
+  const updateUserProfile = async (id: string, updates: { role?: AppUser['role'], playerId?: string | null }) => {
     if (supabase) {
       const updateData: any = {};
       if (updates.role) updateData.role = updates.role;
       if (updates.playerId !== undefined) updateData.player_id = updates.playerId; // Allow null to unlink
 
-      await supabase.from('profiles').update(updateData).eq('id', id);
+      const { error } = await supabase.from('profiles').update(updateData).eq('id', id);
+
+      if (error) {
+        console.error('Error updating user profile:', error);
+        throw error;
+      }
       
       setUsers(prev => prev.map(u => (u.id === id ? { 
           ...u, 
           role: updates.role || u.role,
-          playerId: updates.playerId !== undefined ? updates.playerId : u.playerId
+          playerId: updates.playerId !== undefined ? (updates.playerId as string | undefined) : u.playerId
       } : u)));
       
       // Update local user if it's me
@@ -417,14 +422,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(prev => prev ? {
               ...prev,
               role: updates.role || prev.role,
-              playerId: updates.playerId !== undefined ? updates.playerId : prev.playerId
+              playerId: updates.playerId !== undefined ? (updates.playerId as string | undefined) : prev.playerId
           } : null);
       }
     } else {
        setUsers(prev => prev.map(u => (u.id === id ? { 
           ...u, 
           role: updates.role || u.role,
-          playerId: updates.playerId !== undefined ? updates.playerId : u.playerId
+          playerId: updates.playerId !== undefined ? (updates.playerId as string | undefined) : u.playerId
       } : u)));
     }
   };
