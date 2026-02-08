@@ -464,6 +464,11 @@ export function generateStrictSchedule(
 
   // 6. FORMAT OUTPUT
   const fixtures: Match[][] = schedule.map((weekMatches, wIdx) => {
+    // Calculate date for this week (wIdx * 7 days after start)
+    const weekDate = new Date(startDate);
+    weekDate.setDate(weekDate.getDate() + (wIdx * 7));
+    const dateStr = weekDate.toISOString().split('T')[0]; // Keep as YYYY-MM-DD string
+
     return weekMatches.map((m, mIdx) => {
       // Map indices back to Player IDs
       return {
@@ -471,7 +476,7 @@ export function generateStrictSchedule(
         team1: [players[m[0][0]].id, players[m[0][1]].id],
         team2: [players[m[1][0]].id, players[m[1][1]].id],
         round: wIdx + 1,
-        date: new Date(startDate).toISOString(), // Placeholder
+        date: dateStr, 
         court: mIdx + 1,
         sets: [],
         winner: null,

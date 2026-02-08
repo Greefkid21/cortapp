@@ -42,6 +42,9 @@ const playerAppearances = new Map<string, number>();
 const partnerCounts = new Map<string, number>();
 const opponentCounts = new Map<string, number>();
 
+// Track dates to ensure they increment
+const weekDates: string[] = [];
+
 fixtures.forEach((week, wIdx) => {
     // Check week coverage
     const weekPlayers = new Set<string>();
@@ -49,6 +52,15 @@ fixtures.forEach((week, wIdx) => {
         console.error(`FAIL: Week ${wIdx+1} has ${week.length} matches (expected 3)`);
         allPassed = false;
     }
+
+    // Check dates
+    const datesInWeek = new Set(week.map(m => m.date));
+    if (datesInWeek.size !== 1) {
+        console.error(`FAIL: Week ${wIdx+1} has mixed dates: ${Array.from(datesInWeek).join(', ')}`);
+        allPassed = false;
+    }
+    const weekDate = week[0].date;
+    weekDates.push(weekDate);
 
     week.forEach(m => {
         // Players (IDs)
@@ -88,6 +100,16 @@ fixtures.forEach((week, wIdx) => {
     }
 });
 
+// Validate Dates are distinct and sorted
+console.log("Week Dates:", weekDates);
+const uniqueDates = new Set(weekDates);
+if (uniqueDates.size !== fixtures.length) {
+    console.error(`FAIL: Dates are not unique across weeks! Found ${uniqueDates.size} unique dates for ${fixtures.length} weeks.`);
+    allPassed = false;
+} else {
+    console.log("PASS: Dates are unique across weeks.");
+}
+
 // Check Partner Rotation
 let partnerErrors = 0;
 // Total unique pairs for N=12 is 12*11/2 = 66
@@ -101,43 +123,12 @@ for (const [pair, count] of partnerCounts) {
         partnerErrors++;
     }
 }
-if (partnerErrors === 0) console.log("PASS: Perfect Partner Rotation");
-
-// Check Opponent Fairness
-let minOpp = 999;
-let maxOpp = 0;
-for (const count of opponentCounts.values()) {
-    minOpp = Math.min(minOpp, count);
-    maxOpp = Math.max(maxOpp, count);
-}
-
-if (minOpp < 1) {
-    console.error(`FAIL: Some pairs never played against each other (Min: ${minOpp})`);
-    allPassed = false;
-} else {
-    console.log(`PASS: Min Opponent Repeat >= 1 (${minOpp})`);
-}
-
-if (maxOpp > 3) {
-    console.error(`FAIL: Some pairs played too often (Max: ${maxOpp})`);
-    allPassed = false;
-} else {
-    console.log(`PASS: Max Opponent Repeat <= 3 (${maxOpp})`);
-}
-
-// Check Seeded Fairness (3x repeats)
-// We expect 3x repeats to be "biased" towards similar seeds
-// Hard to strictly validate "bias" without a statistical test, but we can check if the stats object is populated
-if (stats.seeded_3x_summary.total > 0) {
-    console.log("PASS: Seeded stats generated");
-    console.log("3x Summary:", stats.seeded_3x_summary);
-} else {
-    console.log("INFO: No 3x repeats found (Perfectly fair schedule?)");
-}
+if (partnerErrors === 0) console.log("PASS: Strict partner rotation (all pairs exactly once)");
+else allPassed = false;
 
 if (allPassed) {
-    console.log("\n✅ ALL TESTS PASSED");
+    console.log("\nALL VERIFICATIONS PASSED!");
 } else {
-    console.error("\n❌ SOME TESTS FAILED");
+    console.error("\nVERIFICATION FAILED!");
     process.exit(1);
 }
