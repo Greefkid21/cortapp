@@ -1,18 +1,12 @@
 import { Player, Match } from '../types';
+import { generateStrictSchedule } from './strictScheduler';
 
 /**
- * Generates a schedule where:
- * 1. Each player partners with every other player exactly once (using Polygon Method).
- * 2. Opponent matchups are optimized globally using exhaustive search over the fixed partnership rounds.
+ * Generates a schedule for the league.
  * 
- * Algorithm:
- * - Partnerships: 1-Factorization of K_n (Round Robin / Polygon Method).
- * - Matchups: 
- *   1. Outer Loop: Random Restart (Shuffle Players) to vary the factorization structure.
- *   2. Inner Loop: Exhaustive Search (Recursion) to find the absolute best set of matchups 
- *      for a given factorization.
- *      For N=8, there are 7 rounds * 3 matchup-configurations/round = 3^7 = 2187 combinations.
- *      This is trivial to solve optimally.
+ * Dispatcher:
+ * - If N is divisible by 4 (Strict Mode), uses the new strict solver (Partner-perfect, fairness optimized).
+ * - Otherwise, falls back to the legacy solver (Polygon + Greedy/Exhaustive).
  */
 export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): Match[] {
   try {
@@ -20,6 +14,32 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         throw new Error("Invalid players array provided");
     }
 
+    const n = players.length;
+
+    // Strict Mode for N % 4 === 0
+    if (n % 4 === 0) {
+        console.log(`Using Strict Mode Scheduler for ${n} players...`);
+        const result = generateStrictSchedule(players, startDate);
+        
+        // Log stats for verification
+        console.log("Strict Schedule Stats:", result.stats);
+        
+        return result.matches;
+    }
+
+    // Legacy Mode for N % 4 !== 0
+    console.log(`Using Legacy Scheduler for ${n} players (not divisible by 4)...`);
+    return generateLegacySchedule(players, startDate);
+
+  } catch (e) {
+      console.error("Scheduler Error:", e);
+      throw e;
+  }
+}
+
+// --- Legacy Logic (Preserved for N=6, 10, etc.) ---
+
+function generateLegacySchedule(players: Player[], startDate: string): Match[] {
     const realPlayerIds = players.map(p => p.id);
     const n = realPlayerIds.length;
     
@@ -51,12 +71,6 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         }
         opsPerRestart = rounds * configs;
     } else {
-        // Exhaustive: 3^(n-1) is upper bound? 
-        // For N=8 (4 pairs), 7 rounds.
-        // Configs per round (4 pairs -> 2 games) = 3.
-        // Total per restart = 3^7 = 2187.
-        // For N=6 (3 pairs -> 1 game + bye), 3 configs.
-        // 3^5 = 243.
         const rounds = n - 1;
         const P = n / 2;
         let configsPerRound = 1;
@@ -112,10 +126,6 @@ export function generateSchedule(players: Player[], startDate: string = new Date
   }
 
   return bestGlobalMatches;
-  } catch (e) {
-      console.error("Scheduler Error:", e);
-      throw e; // Re-throw so worker catches it
-  }
 }
 
 /**
@@ -134,19 +144,6 @@ function generatePolygonRounds(players: string[]): string[][][] {
 
   for (let r = 0; r < numRounds; r++) {
     const roundPairs: string[][] = [];
-    
-    // Pair the fixed player with the current 'last' player in the rotation
-    // (In standard polygon method, fixed point is center, others are vertices)
-    // Here we align 0 with index r of rotation?
-    // Let's use standard indices:
-    // Fixed point connects to rotatingPlayers[r]
-    // Then others connect crossing the polygon
-    
-    // Actually, simpler implementation:
-    // Round r:
-    // Pair (Fixed, Rotating[r])
-    // Pair (Rotating[r+1], Rotating[r-1]) ...
-    // Indices are mod (n-1)
     
     const m = rotatingPlayers.length; // n-1 (odd)
     
@@ -255,8 +252,6 @@ function findGreedyScheduleForRounds(
              const { diff, totalCost } = calculateMetrics(tempHistory, playerToIndex, n);
              
              // Weighted score
-             // Handle case where diff/cost are Infinity (e.g. first round)
-             // If diff is Infinity, we treat it as 0 for the first round to allow progress
              const safeDiff = diff === Infinity ? 0 : diff;
              const safeCost = totalCost === Infinity ? 0 : totalCost;
 
@@ -270,8 +265,6 @@ function findGreedyScheduleForRounds(
         if (bestConfig) {
             currentMatches.push(...bestConfig);
         } else {
-            // Fallback: If no valid config found (shouldn't happen with safeDiff logic, but safety first)
-            // Pick the first one
              const firstConfig = matchConfigs[0];
              const roundMatches = firstConfig.map((matchUp, i) => ({
                 id: `gen-${r}-${i}-${Math.random().toString(36).substring(2, 7)}`,
@@ -302,9 +295,6 @@ function findOptimalScheduleForRounds(
   let minMaxDiff = Infinity;
   let minTotalCost = Infinity;
 
-  // Pre-allocate metrics buffer for performance
-  // We use a flat array instead of 2D for slightly better perf? 2D is fine.
-  
   function recurse(roundIdx: number, currentMatches: Match[]) {
     if (roundIdx === rounds.length) {
       // Base case: evaluate full schedule
@@ -346,28 +336,19 @@ function findOptimalScheduleForRounds(
 }
 
 function calculateMetrics(matches: Match[], playerToIndex: Map<string, number>, n: number): { diff: number, totalCost: number } {
-  // Use a flat array of size N*N to store counts
-  // count[i*N + j] stores count of i vs j
   const counts = new Int32Array(n * n);
   
   let totalCost = 0;
 
   for (const m of matches) {
-    // team1 vs team2
-    // optimized inner loops
     const t1 = m.team1;
     const t2 = m.team2;
-    // We assume doubles (2 players per team)
-    // t1[0] vs t2[0], t1[0] vs t2[1], t1[1] vs t2[0], t1[1] vs t2[1]
     
     const p1a = playerToIndex.get(t1[0])!;
     const p1b = playerToIndex.get(t1[1])!;
     const p2a = playerToIndex.get(t2[0])!;
     const p2b = playerToIndex.get(t2[1])!;
 
-    // Symmetric update not needed for cost calculation if we just check one way
-    // But to be safe and simple, let's just increment lower-index vs higher-index
-    
     const update = (i: number, j: number) => {
         const u = i < j ? i : j;
         const v = i < j ? j : i;
@@ -384,7 +365,6 @@ function calculateMetrics(matches: Match[], playerToIndex: Map<string, number>, 
   let max = -Infinity;
   let hasValues = false;
 
-  // Scan the upper triangle
   for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
           const c = counts[i * n + j];
