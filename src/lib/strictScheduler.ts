@@ -10,7 +10,8 @@ export interface StrictModeStats {
   opponentCountHistogram: Record<string, number>; // "0":x, "1":y, ...
   cost: number;
   total_3x_pairs: number;
-  seededFairnessWarning?: boolean; // New flag for A-C > A-A rejection
+  seededFairnessWarning?: boolean; // Deprecated by seededFairnessForcedFailure but kept for compatibility
+  seededFairnessForcedFailure?: boolean; // New flag for strict 50% rule violation
   count_3x_by_tier: {
     AA: number;
     AB: number;
@@ -202,9 +203,11 @@ export function generateStrictSchedule(
   const isValidFairness = (countsMatrix: number[][]): boolean => {
     let ac3 = 0;
     let aa3 = 0;
+    let total3 = 0;
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         if (countsMatrix[i][j] === 3) {
+          total3++;
           const t1 = getTier(i);
           const t2 = getTier(j);
           const combo = [t1, t2].sort().join('');
@@ -213,8 +216,14 @@ export function generateStrictSchedule(
         }
       }
     }
-    // Reject if A-C > A-A
-    return ac3 <= aa3;
+    
+    // HARD ACCEPTANCE CRITERIA (ALL MUST PASS):
+    // 1. AA >= AC
+    // 2. AA >= ceil(TOTAL_3X / 2)
+    const rule1 = aa3 >= ac3;
+    const rule2 = aa3 >= Math.ceil(total3 / 2);
+
+    return rule1 && rule2;
   };
 
   // Validation Helper for Hard Constraints (1-3 repeats)
@@ -539,9 +548,15 @@ export function generateStrictSchedule(
   });
 
   // FINAL POST-GENERATION REJECTION RULE
-  // Check if (A-C 3x pairs) > (A-A 3x pairs)
-  // If so, mark as rejected (warning) if we are forced to return it.
-  if (stats.count_3x_by_tier.AC > stats.count_3x_by_tier.AA) {
+  // HARD ACCEPTANCE CRITERIA (ALL MUST PASS):
+  // 1. AA >= AC
+  // 2. AA >= ceil(TOTAL_3X / 2)
+  const rule1 = stats.count_3x_by_tier.AA >= stats.count_3x_by_tier.AC;
+  const rule2 = stats.count_3x_by_tier.AA >= Math.ceil(stats.total_3x_pairs / 2);
+
+  if (!rule1 || !rule2) {
+      stats.seededFairnessForcedFailure = true;
+      // Also set the old warning for compatibility
       stats.seededFairnessWarning = true;
   }
 
@@ -601,6 +616,10 @@ Generated strict mode schedule for ${N} players.
   }
   if (easySchedulePlayers.length > 0) {
       explanation += `\n- Note: Players ${easySchedulePlayers.join(', ')} have an easier than average schedule.`;
+  }
+
+  if (stats.seededFairnessForcedFailure) {
+      explanation += `\n- WARNING: Mathematical constraints prevented full enforcement of fairness rules. (AA < AC or AA < 50% of 3x repeats)`;
   }
 
   return {
