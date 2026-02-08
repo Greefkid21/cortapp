@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useSeason } from '../context/SeasonContext';
 import { useAuth } from '../context/AuthContext';
-import { Player, Match } from '../types';
-import { Archive, CalendarDays } from 'lucide-react';
+import { Player, Match, SeasonArchive } from '../types';
+import { Archive, CalendarDays, Trash2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { LeagueTable } from '../components/LeagueTable';
+import { MatchHistory } from '../components/MatchHistory';
 
 export function Seasons({ players, matches, onReset }: { players: Player[]; matches: Match[]; onReset: () => void }) {
-  const { currentSeasonName, currentSeasonStart, archives, archiveAndStart } = useSeason();
+  const { currentSeasonName, currentSeasonStart, archives, archiveAndStart, deleteArchive } = useSeason();
   const { isAdmin } = useAuth();
   const [newSeasonName, setNewSeasonName] = useState('');
+  const [selectedSeason, setSelectedSeason] = useState<SeasonArchive | null>(null);
 
   if (!isAdmin) {
     return <div className="p-8 text-center">You do not have permission to view this page.</div>;
@@ -19,6 +22,49 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
     onReset();
     setNewSeasonName('');
   };
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm('Are you sure you want to delete this archived season? This cannot be undone.')) {
+      await deleteArchive(id);
+      if (selectedSeason?.id === id) {
+        setSelectedSeason(null);
+      }
+    }
+  };
+
+  if (selectedSeason) {
+    return (
+      <div className="space-y-6 pb-20">
+        <button 
+          onClick={() => setSelectedSeason(null)}
+          className="flex items-center gap-2 text-slate-500 hover:text-primary transition-colors font-medium"
+        >
+          <ArrowLeft className="w-5 h-5" /> Back to Seasons
+        </button>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">{selectedSeason.name}</h2>
+            <div className="text-sm text-slate-500">
+              {selectedSeason.startDate} - {selectedSeason.endDate}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-8">
+            <div>
+                <h3 className="text-lg font-bold text-slate-800 mb-4">Final Standings</h3>
+                <LeagueTable players={selectedSeason.players} />
+            </div>
+
+            <div>
+                <MatchHistory matches={selectedSeason.matches} players={selectedSeason.players} />
+            </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-20">
@@ -62,13 +108,27 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
         ) : (
           <div className="divide-y divide-slate-100">
             {archives.map(a => (
-              <div key={a.id} className="p-4 flex items-center justify-between">
+              <div 
+                key={a.id} 
+                onClick={() => setSelectedSeason(a)}
+                className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
+              >
                 <div>
-                  <div className="font-bold text-slate-900">{a.name}</div>
+                  <div className="font-bold text-slate-900 group-hover:text-primary transition-colors">{a.name}</div>
                   <div className="text-xs text-slate-500">From {a.startDate} to {a.endDate}</div>
                 </div>
-                <div className="text-xs text-slate-500">
-                  {a.players.length} players • {a.matches.length} matches
+                <div className="flex items-center gap-4">
+                    <div className="text-xs text-slate-500 text-right">
+                    {a.players.length} players • {a.matches.length} matches
+                    </div>
+                    <button
+                        onClick={(e) => handleDelete(a.id, e)}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Archive"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary" />
                 </div>
               </div>
             ))}

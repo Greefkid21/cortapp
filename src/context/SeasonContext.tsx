@@ -8,6 +8,7 @@ interface SeasonContextType {
   currentSeasonId: string | null;
   archives: SeasonArchive[];
   archiveAndStart: (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[]) => Promise<void>;
+  deleteArchive: (id: string) => Promise<void>;
   loading: boolean;
 }
 
@@ -173,12 +174,30 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteArchive = async (id: string) => {
+    if (supabase) {
+      const { error } = await supabase
+        .from('seasons')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting archived season:', error);
+        return;
+      }
+    }
+    
+    // Update local state (works for both supabase and mock)
+    setArchives(prev => prev.filter(a => a.id !== id));
+  };
+
   const value = useMemo(() => ({
     currentSeasonName,
     currentSeasonStart,
     currentSeasonId,
     archives,
     archiveAndStart,
+    deleteArchive,
     loading
   }), [currentSeasonName, currentSeasonStart, currentSeasonId, archives, loading]);
 
