@@ -9,14 +9,23 @@ export interface StrictModeStats {
   minOpponentRepeat: number;
   opponentCountHistogram: Record<string, number>; // "0":x, "1":y, ...
   cost: number;
-  seeded_3x_summary: {
+  total_3x_pairs: number;
+  count_3x_by_tier: {
+    AA: number;
+    AB: number;
+    AC: number;
+    BB: number;
+    BC: number;
+    CC: number;
+  };
+  seeded_3x_summary: { // Keep for backward compatibility if needed, or map to new structure
     total: number;
-    topTop: number;   // Both in top quartile
-    topMid: number;   // Top vs Mid
-    midMid: number;   // Both Mid
-    midLow: number;   // Mid vs Bottom
-    lowLow: number;   // Both Bottom
-    topLow: number;   // Top vs Bottom (Should be minimized)
+    topTop: number;
+    topMid: number;
+    midMid: number;
+    midLow: number;
+    lowLow: number;
+    topLow: number;
   };
   per_player_strength_of_schedule: Array<{
     id: string;
@@ -59,7 +68,15 @@ function getSeedMetrics(players: Player[]) {
     return (maxSeed - pSeeds[idx]) / (maxSeed - minSeed);
   };
 
-  return { maxSeed, minSeed, pSeeds, seedNorm };
+  // Tier helper (1=A, 2=B, 3=C)
+  const getTier = (idx: number): 1 | 2 | 3 => {
+    const seed = pSeeds[idx];
+    if (seed <= 4) return 1; // Tier A
+    if (seed <= 8) return 2; // Tier B
+    return 3;                // Tier C (9+)
+  };
+
+  return { maxSeed, minSeed, pSeeds, seedNorm, getTier };
 }
 
 // ---------------------------------------------------------------------------
@@ -98,48 +115,59 @@ export function generateStrictSchedule(
   }
 
   // 2. PREPARE DATA
-  const { pSeeds, seedNorm } = getSeedMetrics(players);
+  const { pSeeds, seedNorm, getTier } = getSeedMetrics(players);
 
   // Precompute pair metrics for cost function
-  // seedDistance(i,j) = abs(norm(i) - norm(j)) -> 0=same level, 1=max diff
-  // topness(i,j) = (norm(i) + norm(j)) / 2 -> 1=both top, 0=both bottom
+  // We precompute the cost multiplier for 3x repeats
   const pairMetrics = new Array(N).fill(0).map(() => new Array(N).fill(null));
   
   for(let i=0; i<N; i++) {
     for(let j=0; j<N; j++) {
       if (i === j) continue;
-      const normI = seedNorm(i);
-      const normJ = seedNorm(j);
-      const dist = Math.abs(normI - normJ);
-      const top = (normI + normJ) / 2;
-      pairMetrics[i][j] = { dist, top };
+      
+      const t1 = getTier(i);
+      const t2 = getTier(j);
+      
+      // Determine Multiplier for 3x repeats based on Tiers
+      // A=1, B=2, C=3
+      let multiplier = 1.0;
+      const combo = [t1, t2].sort().join('');
+      
+      switch (combo) {
+        case '11': multiplier = 0.5; break; // A-A
+        case '33': multiplier = 0.5; break; // C-C
+        case '22': multiplier = 1.0; break; // B-B
+        case '12': multiplier = 1.5; break; // A-B
+        case '23': multiplier = 1.5; break; // B-C
+        case '13': multiplier = 4.0; break; // A-C
+        default: multiplier = 1.0; // Fallback
+      }
+
+      pairMetrics[i][j] = { multiplier };
     }
   }
 
   // Cost Function
   const getPairCost = (i: number, j: number, count: number): number => {
-    // Hard penalties based on counts - INCREASED MAGNITUDE
-    // User requested base 50/100 for 0/4+, and 1 for 1/3.
-    // We scale these up to ensure hard constraints are strictly respected by the optimizer.
+    // Hard penalties based on counts - HUGE MAGNITUDE to enforce strict constraints
     if (count === 2) return 0; // Ideal
-    if (count === 0) return 30000; // Must avoid (User base 50 -> Scaled)
-    if (count === 4) return 40000; // Forbidden (User base 100 -> Scaled)
-    if (count > 4) return 100000 + (count - 3) * 10000; // Absolutely Forbidden
+    if (count === 0) return 50000000; // Must avoid (Weighted > sum of all possible bad 3x)
+    if (count === 4) return 100000000; // Forbidden
+    if (count > 4) return 100000000 + (count - 3) * 10000000; // Absolutely Forbidden
 
-    const { dist, top } = pairMetrics[i][j];
+    const { multiplier } = pairMetrics[i][j];
 
     // Seed-weighted penalty for 3x
     if (count === 3) {
-      // User formula: penalty *= (1 + seedDistance_norm - 0.6 * topness)
-      // Base penalty 1000 (Scaled from 1)
-      return 1000 * (1 + dist - 0.6 * top);
+      // Base penalty 1000 * multiplier
+      // Range: 500 (A-A) to 4000 (A-C)
+      return 1000 * multiplier;
     }
 
     // Seed-weighted penalty for 1x
     if (count === 1) {
-      // User formula: penalty *= (1 - 0.2 * seedDistance_norm)
-      // Base penalty 500 (Scaled from 1)
-      return 500 * (1 - 0.2 * dist);
+      // Base penalty 1000 (standardized)
+      return 1000;
     }
 
     return 0;
@@ -198,6 +226,27 @@ export function generateStrictSchedule(
   const matchesPerWeek = N / 4;
   let globalBestSchedule = JSON.parse(JSON.stringify(schedule));
   let globalBestCost = Infinity;
+  let validBestSchedule: [number, number][][][] | null = null;
+  let validBestCost = Infinity;
+
+  // Validation Helper for A-C vs A-A check
+  const isValidFairness = (countsMatrix: number[][]): boolean => {
+    let ac3 = 0;
+    let aa3 = 0;
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        if (countsMatrix[i][j] === 3) {
+          const t1 = getTier(i);
+          const t2 = getTier(j);
+          const combo = [t1, t2].sort().join('');
+          if (combo === '13') ac3++; // A-C
+          if (combo === '11') aa3++; // A-A
+        }
+      }
+    }
+    // Reject if A-C > A-A
+    return ac3 <= aa3;
+  };
 
   // Initial cost check
   const opponentCounts = Array(N).fill(0).map(() => Array(N).fill(0));
@@ -360,10 +409,23 @@ export function generateStrictSchedule(
         globalBestCost = currentCost;
         globalBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
     }
+    
+    // Check validation if this is a candidate for valid best
+    if (currentCost < validBestCost) {
+        if (isValidFairness(currentCounts)) {
+            validBestCost = currentCost;
+            validBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
+        }
+    }
   }
 
-  // Use Best Schedule
-  schedule = globalBestSchedule;
+  // Use Best Valid Schedule if available, else Global Best (fallback)
+  if (validBestSchedule) {
+      schedule = validBestSchedule;
+      globalBestCost = validBestCost;
+  } else {
+      schedule = globalBestSchedule;
+  }
   
   // Recompute final counts for stats
   // Reset opponentCounts
@@ -376,6 +438,8 @@ export function generateStrictSchedule(
     minOpponentRepeat: 999,
     opponentCountHistogram: {},
     cost: globalBestCost,
+    total_3x_pairs: 0,
+    count_3x_by_tier: { AA: 0, AB: 0, AC: 0, BB: 0, BC: 0, CC: 0 },
     seeded_3x_summary: {
       total: 0,
       topTop: 0, topMid: 0, midMid: 0, midLow: 0, lowLow: 0, topLow: 0
@@ -405,11 +469,24 @@ export function generateStrictSchedule(
       // Seed stats for 3x
       if (c === 3) {
         stats.seeded_3x_summary.total++;
+        stats.total_3x_pairs++;
+        
+        // Tier Stats
+        const t1 = getTier(i);
+        const t2 = getTier(j);
+        const tierCombo = [t1, t2].sort().join('');
+        
+        if (tierCombo === '11') stats.count_3x_by_tier.AA++;
+        else if (tierCombo === '12') stats.count_3x_by_tier.AB++;
+        else if (tierCombo === '13') stats.count_3x_by_tier.AC++;
+        else if (tierCombo === '22') stats.count_3x_by_tier.BB++;
+        else if (tierCombo === '23') stats.count_3x_by_tier.BC++;
+        else if (tierCombo === '33') stats.count_3x_by_tier.CC++;
+
+        // Legacy Stats (Approximate Quartiles)
         const s1 = seedNorm(i);
         const s2 = seedNorm(j);
         
-        // Categorize
-        // Quartiles approx: Top > 0.66, Mid 0.33-0.66, Low < 0.33
         const q1 = s1 > 0.66 ? 'T' : (s1 < 0.33 ? 'L' : 'M');
         const q2 = s2 > 0.66 ? 'T' : (s2 < 0.33 ? 'L' : 'M');
         const combo = [q1, q2].sort().join('');
@@ -498,8 +575,8 @@ export function generateStrictSchedule(
 Generated strict mode schedule for ${N} players.
 - Constraints: All hard constraints met (Partner rotation, No byes).
 - Fairness: Opponent repeats bounded between ${stats.minOpponentRepeat} and ${stats.maxOpponentRepeat}.
-- Seed Logic: 3x repeats biased towards similar skill levels. 
-  (Top-Top: ${stats.seeded_3x_summary.topTop}, Top-Low: ${stats.seeded_3x_summary.topLow}).
+- Seed Logic: 3x repeats biased by Tier (A=1-4, B=5-8, C=9-12).
+  (AA: ${stats.count_3x_by_tier.AA}, AC: ${stats.count_3x_by_tier.AC}, CC: ${stats.count_3x_by_tier.CC}).
 `.trim();
 
   if (hardSchedulePlayers.length > 0) {

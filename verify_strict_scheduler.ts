@@ -126,6 +126,30 @@ for (const [pair, count] of partnerCounts) {
 if (partnerErrors === 0) console.log("PASS: Strict partner rotation (all pairs exactly once)");
 else allPassed = false;
 
+// Check Seeded Fairness
+console.log("\nSeeded Fairness Analysis:");
+const tiers = stats.count_3x_by_tier;
+if (!tiers) {
+    console.error("FAIL: Missing count_3x_by_tier stats");
+    allPassed = false;
+} else {
+    console.log("3x Pairs by Tier Combo:", JSON.stringify(tiers, null, 2));
+    
+    // Check A-C vs A-A
+    if (tiers.AC > tiers.AA) {
+        console.error(`FAIL: A-C 3x repeats (${tiers.AC}) exceed A-A 3x repeats (${tiers.AA}). This violates fairness rules.`);
+        allPassed = false;
+    } else {
+        console.log(`PASS: A-C (${tiers.AC}) <= A-A (${tiers.AA})`);
+    }
+
+    // Check Total 3x matches total reported
+    const sumTiers = tiers.AA + tiers.AB + tiers.AC + tiers.BB + tiers.BC + tiers.CC;
+    if (sumTiers !== stats.total_3x_pairs) {
+         console.warn(`WARN: Tier breakdown sum (${sumTiers}) != total_3x_pairs (${stats.total_3x_pairs})`);
+    }
+}
+
 if (allPassed) {
     console.log("\nALL VERIFICATIONS PASSED!");
 } else {
