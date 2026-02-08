@@ -86,7 +86,7 @@ function getSeedMetrics(players: Player[]) {
 export function generateStrictSchedule(
   players: Player[], 
   startDate: string, // Unused logic-wise but kept for signature compatibility if needed
-  maxTimeMs: number = 500
+  maxTimeMs: number = 10000 // Increased default time to 10s for deep optimization
 ): StrictModeResult {
   const N = players.length;
   const startTime = Date.now();
@@ -117,60 +117,19 @@ export function generateStrictSchedule(
   // 2. PREPARE DATA
   const { pSeeds, seedNorm, getTier } = getSeedMetrics(players);
 
-  // Precompute pair metrics for cost function
-  // We precompute the cost multiplier for 3x repeats
-  const pairMetrics = new Array(N).fill(0).map(() => new Array(N).fill(null));
-  
-  for(let i=0; i<N; i++) {
-    for(let j=0; j<N; j++) {
-      if (i === j) continue;
-      
-      const t1 = getTier(i);
-      const t2 = getTier(j);
-      
-      // Determine Multiplier for 3x repeats based on Tiers
-      // A=1, B=2, C=3
-      let multiplier = 1.0;
-      const combo = [t1, t2].sort().join('');
-      
-      switch (combo) {
-        case '11': multiplier = 0.5; break; // A-A
-        case '33': multiplier = 0.5; break; // C-C
-        case '22': multiplier = 1.0; break; // B-B
-        case '12': multiplier = 1.5; break; // A-B
-        case '23': multiplier = 1.5; break; // B-C
-        case '13': multiplier = 4.0; break; // A-C
-        default: multiplier = 1.0; // Fallback
-      }
-
-      pairMetrics[i][j] = { multiplier };
-    }
-  }
+  // Config
+  // Increased costs to prioritize hard constraints (1-3 plays)
+  const COST_GAP = 1000;
+  const COST_VIOLATION = 50000000; // 50M
 
   // Cost Function
   const getPairCost = (i: number, j: number, count: number): number => {
-    // Hard penalties based on counts - HUGE MAGNITUDE to enforce strict constraints
-    if (count === 2) return 0; // Ideal
-    if (count === 0) return 50000000; // Must avoid (Weighted > sum of all possible bad 3x)
-    if (count === 4) return 100000000; // Forbidden
-    if (count > 4) return 100000000 + (count - 3) * 10000000; // Absolutely Forbidden
-
-    const { multiplier } = pairMetrics[i][j];
-
-    // Seed-weighted penalty for 3x
-    if (count === 3) {
-      // Base penalty 1000 * multiplier
-      // Range: 500 (A-A) to 4000 (A-C)
-      return 1000 * multiplier;
-    }
-
-    // Seed-weighted penalty for 1x
-    if (count === 1) {
-      // Base penalty 1000 (standardized)
-      return 1000;
-    }
-
-    return 0;
+      // Hard penalties based on counts - HUGE MAGNITUDE to enforce strict constraints
+      if (count === 2) return 0; // Ideal
+      if (count === 1 || count === 3) return COST_GAP;
+      if (count === 0) return COST_VIOLATION;
+      // count >= 4
+      return COST_VIOLATION + (count - 3) * COST_VIOLATION; 
   };
 
   // 3. CONSTRUCTION (Partner-Perfect Wheel)
@@ -224,8 +183,16 @@ export function generateStrictSchedule(
   };
 
   const matchesPerWeek = N / 4;
+  
+  // Best Schedules Hierarchy
   let globalBestSchedule = JSON.parse(JSON.stringify(schedule));
   let globalBestCost = Infinity;
+
+  // Level 1: Hard Constraints Met (1 <= count <= 3)
+  let hardValidBestSchedule: [number, number][][][] | null = null;
+  let hardValidBestCost = Infinity;
+
+  // Level 2: Hard + Soft Fairness Met (A-C <= A-A)
   let validBestSchedule: [number, number][][][] | null = null;
   let validBestCost = Infinity;
 
@@ -248,6 +215,17 @@ export function generateStrictSchedule(
     return ac3 <= aa3;
   };
 
+  // Validation Helper for Hard Constraints (1-3 repeats)
+  const isValidHard = (countsMatrix: number[][]): boolean => {
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const c = countsMatrix[i][j];
+        if (c < 1 || c > 3) return false;
+      }
+    }
+    return true;
+  };
+
   // Initial cost check
   const opponentCounts = Array(N).fill(0).map(() => Array(N).fill(0));
   const updateCounts = (sched: [number, number][][][], op: 'add' | 'sub', countsMatrix: number[][]) => {
@@ -266,8 +244,17 @@ export function generateStrictSchedule(
       }
   };
   
-  // Optimization Loop
-  while ((Date.now() - startTime) < maxTimeMs) {
+  // Optimization Loop with Retries
+  const MAX_RETRIES = 5;
+  let attempt = 0;
+
+  while (attempt < MAX_RETRIES && !validBestSchedule) {
+    attempt++;
+    // If we have a hard valid schedule, we can be a bit less desperate, 
+    // but we really want strict fairness.
+    // If we are out of time, we stop.
+    if ((Date.now() - startTime) >= maxTimeMs) break;
+
     // 4a. Random Initial State (Shuffle matches within weeks)
     const currentSchedule = rounds.map(weekPairs => {
       const shuffled = [...weekPairs].sort(() => Math.random() - 0.5);
@@ -285,11 +272,19 @@ export function generateStrictSchedule(
     // 4b. Local Search
     let localImprovement = true;
     let localIter = 0;
-    const maxLocalIter = 10000; // Increased iterations from 2500
+    const maxLocalIter = 25000; // Adjusted for more restarts within time limit
 
-    while (localImprovement && localIter < maxLocalIter && (Date.now() - startTime) < maxTimeMs) {
+    while (localIter < maxLocalIter && (Date.now() - startTime) < maxTimeMs) {
         localImprovement = false;
         localIter++;
+
+        // Sync counts periodically to prevent drift (especially for small N where it's cheap)
+        if (N <= 20 || localIter % 100 === 0) {
+             // Reset and recompute
+             for(let i=0; i<N; i++) for(let j=0; j<N; j++) currentCounts[i][j] = 0;
+             updateCounts(currentSchedule, 'add', currentCounts);
+             currentCost = calculateTotalCostFromCounts(currentCounts);
+        }
 
         // Pick a random week
         const w = Math.floor(Math.random() * numRounds);
@@ -297,7 +292,7 @@ export function generateStrictSchedule(
         if (matchesPerWeek < 2) break;
 
         // Try multiple random swaps per iteration
-        for(let k=0; k<15; k++) { // Increased swap attempts
+        for(let k=0; k<20; k++) { // Increased swap attempts
             const m1Idx = Math.floor(Math.random() * matchesPerWeek);
             let m2Idx = Math.floor(Math.random() * matchesPerWeek);
             while (m2Idx === m1Idx) m2Idx = Math.floor(Math.random() * matchesPerWeek);
@@ -370,8 +365,9 @@ export function generateStrictSchedule(
             if (delta < 0) {
                 accept = true;
             } else {
-                 // Only allow uphill moves if they are "small" (seed adjustments, < 100)
-                 if (delta < 100 && Math.random() < Math.exp(-delta * 0.5)) {
+                 // Allow uphill moves if they are "small" (seed adjustments or breaking perfect 2s to fix others)
+                 // 2->3 costs 1000. So we need threshold > 1000.
+                 if (delta < 2000 && Math.random() < 0.05) {
                     accept = true;
                  }
             }
@@ -411,18 +407,33 @@ export function generateStrictSchedule(
     }
     
     // Check validation if this is a candidate for valid best
-    if (currentCost < validBestCost) {
+    const isHardValid = isValidHard(currentCounts);
+    
+    if (isHardValid) {
+        // Update Hard Valid Best
+        if (currentCost < hardValidBestCost) {
+             hardValidBestCost = currentCost;
+             hardValidBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
+        }
+
+        // Update Full Valid Best (Hard + Fairness)
         if (isValidFairness(currentCounts)) {
-            validBestCost = currentCost;
-            validBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
+             if (currentCost < validBestCost) {
+                validBestCost = currentCost;
+                validBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
+             }
         }
     }
   }
 
-  // Use Best Valid Schedule if available, else Global Best (fallback)
+  // Use Best Available Schedule
+  // Priority: ValidBest (Hard+Fair) > HardValidBest (Hard) > GlobalBest
   if (validBestSchedule) {
       schedule = validBestSchedule;
       globalBestCost = validBestCost;
+  } else if (hardValidBestSchedule) {
+      schedule = hardValidBestSchedule;
+      globalBestCost = hardValidBestCost;
   } else {
       schedule = globalBestSchedule;
   }
