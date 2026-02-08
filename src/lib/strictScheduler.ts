@@ -203,11 +203,10 @@ export function generateStrictSchedule(
   const isValidFairness = (countsMatrix: number[][]): boolean => {
     let ac3 = 0;
     let aa3 = 0;
-    let total3 = 0;
+    
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         if (countsMatrix[i][j] === 3) {
-          total3++;
           const t1 = getTier(i);
           const t2 = getTier(j);
           const combo = [t1, t2].sort().join('');
@@ -217,13 +216,10 @@ export function generateStrictSchedule(
       }
     }
     
-    // HARD ACCEPTANCE CRITERIA (ALL MUST PASS):
-    // 1. AA >= AC
-    // 2. AA >= ceil(TOTAL_3X / 2)
-    const rule1 = aa3 >= ac3;
-    const rule2 = aa3 >= Math.ceil(total3 / 2);
-
-    return rule1 && rule2;
+    // FINAL HARD ACCEPTANCE RULE:
+    // 1. AC <= 1 (At most one top-vs-bottom 3x repeat)
+    // 2. AA >= 2 (At least two top-vs-top 3x repeats)
+    return ac3 <= 1 && aa3 >= 2;
   };
 
   // Validation Helper for Hard Constraints (1-3 repeats)
@@ -549,25 +545,30 @@ export function generateStrictSchedule(
 
   // FINAL POST-GENERATION REJECTION RULE
   // HARD ACCEPTANCE CRITERIA (ALL MUST PASS):
-  // 1. AA >= AC
-  // 2. AA >= ceil(TOTAL_3X / 2)
-  const rule1 = stats.count_3x_by_tier.AA >= stats.count_3x_by_tier.AC;
-  const rule2 = stats.count_3x_by_tier.AA >= Math.ceil(stats.total_3x_pairs / 2);
+  // 1. AC <= 1
+  // 2. AA >= 2
+  const rule1 = stats.count_3x_by_tier.AC <= 1;
+  const rule2 = stats.count_3x_by_tier.AA >= 2;
 
   if (!rule1 || !rule2) {
       stats.seededFairnessForcedFailure = true;
       // Also set the old warning for compatibility
       stats.seededFairnessWarning = true;
   }
-
+  
   if (!valid) {
+    const failureExplanation = stats.seededFairnessForcedFailure 
+      ? "Strict partner rotation and mathematical constraints prevented full seeded enforcement."
+      : undefined;
+
     return {
       ok: false,
       error: {
         code: "FAIRNESS_VALIDATION_FAILED",
         message: validationError
       },
-      stats // Return stats even on failure for debugging
+      stats, // Return stats even on failure for debugging
+      explanation: failureExplanation
     };
   }
 
@@ -619,7 +620,7 @@ Generated strict mode schedule for ${N} players.
   }
 
   if (stats.seededFairnessForcedFailure) {
-      explanation += `\n- WARNING: Mathematical constraints prevented full enforcement of fairness rules. (AA < AC or AA < 50% of 3x repeats)`;
+      explanation += `\n- WARNING: Strict partner rotation and mathematical constraints prevented full seeded enforcement.`;
   }
 
   return {
