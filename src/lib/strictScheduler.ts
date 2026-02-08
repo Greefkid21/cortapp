@@ -20,8 +20,8 @@ export function generateStrictSchedule(
   const N = players.length;
 
   // 1. Strict Mode Eligibility
-  if (N % 4 !== 0) {
-    throw new Error(`Strict mode requires N divisible by 4 (e.g., 12, 16, 20). Received ${N}.`);
+  if (N < 4 || N % 4 !== 0) {
+    throw new Error(`Strict mode requires N >= 4 and divisible by 4 (e.g., 4, 8, 12, 16). Received ${N}.`);
   }
 
   const playerIds = players.map(p => p.id);
@@ -125,7 +125,8 @@ function getPenalty(count: number): number {
 }
 
 function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number): OptimizationResult {
-  const startTime = performance.now();
+  const getNow = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const startTime = getNow();
   const numWeeks = roundsOfTeams.length;
   
   // Global Best
@@ -189,7 +190,7 @@ function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number)
   };
 
   // Main Restart Loop
-  while ((performance.now() - startTime) < maxTimeMs) {
+  while ((getNow() - startTime) < maxTimeMs) {
       restarts++;
       
       // 1. Initialize Random Schedule
@@ -244,7 +245,7 @@ function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number)
       let iterations = 0;
       const MAX_LOCAL_STEPS = 5000; // Prevent getting stuck too long in one valley
 
-      while (improved && iterations < MAX_LOCAL_STEPS && (performance.now() - startTime) < maxTimeMs) {
+      while (improved && iterations < MAX_LOCAL_STEPS && (getNow() - startTime) < maxTimeMs) {
           improved = false;
           iterations++;
 

@@ -18,6 +18,7 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
   const { getUnreadCount } = useChat();
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(players.map(p => p.id));
   const [generated, setGenerated] = useState<Match[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [newDate, setNewDate] = useState<string>('');
   const [newStatus, setNewStatus] = useState<Match['status']>('scheduled');
@@ -39,7 +40,17 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
     worker.onmessage = (e) => {
         const { type, payload } = e.data;
         if (type === 'SUCCESS') {
-            setGenerated(payload);
+            if (payload.matches && Array.isArray(payload.matches)) {
+                setGenerated(payload.matches);
+                if (payload.stats) {
+                    setStats(payload.stats);
+                    console.log('Schedule Stats:', payload.stats);
+                }
+            } else if (Array.isArray(payload)) {
+                // Legacy fallback
+                setGenerated(payload);
+                setStats(null);
+            }
         } else {
             console.error('Error generating schedule:', payload);
             alert('An error occurred while generating the schedule. Please check the console.');
@@ -161,6 +172,33 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
         {generated.length > 0 && (
             <div className="mt-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
                 <h4 className="font-medium text-slate-700 mb-3">Preview ({generated.length} Matches)</h4>
+                
+                {stats && (
+                    <div className="mb-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-600 border border-slate-200">
+                        <div className="flex justify-between items-start mb-2">
+                            <h5 className="font-bold text-slate-800">Fairness Optimization Stats</h5>
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold">STRICT MODE</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <p>Max Opponent Repeat: <span className="font-mono font-bold">{stats.maxOpponentRepeat}</span></p>
+                                <p>Total Cost: <span className="font-mono">{stats.cost}</span></p>
+                            </div>
+                            <div>
+                                <p className="mb-1 font-semibold">Opponent Frequency (Pairs):</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {Object.entries(stats.opponentCountHistogram || {}).map(([k, v]) => (
+                                        <div key={k} className="bg-white px-2 py-1 rounded border border-slate-100 shadow-sm flex items-center gap-1">
+                                            <span className="font-bold text-slate-800">{k}x:</span> 
+                                            <span>{v as any}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-4 mb-4 max-h-96 overflow-y-auto pr-2">
                     {Object.entries(generated.reduce((acc, m) => {
                         (acc[m.date] = acc[m.date] || []).push(m);

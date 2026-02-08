@@ -1,6 +1,11 @@
 import { Player, Match } from '../types';
 import { generateStrictSchedule } from './strictScheduler';
 
+export interface SchedulerResult {
+    matches: Match[];
+    stats?: any;
+}
+
 /**
  * Generates a schedule for the league.
  * 
@@ -8,7 +13,7 @@ import { generateStrictSchedule } from './strictScheduler';
  * - If N is divisible by 4 (Strict Mode), uses the new strict solver (Partner-perfect, fairness optimized).
  * - Otherwise, falls back to the legacy solver (Polygon + Greedy/Exhaustive).
  */
-export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): Match[] {
+export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): SchedulerResult {
   try {
     if (!players || !Array.isArray(players) || players.length < 2) {
         throw new Error("Invalid players array provided");
@@ -24,12 +29,13 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         // Log stats for verification
         console.log("Strict Schedule Stats:", result.stats);
         
-        return result.matches;
+        return { matches: result.matches, stats: result.stats };
     }
 
     // Legacy Mode for N % 4 !== 0
     console.log(`Using Legacy Scheduler for ${n} players (not divisible by 4)...`);
-    return generateLegacySchedule(players, startDate);
+    const matches = generateLegacySchedule(players, startDate);
+    return { matches };
 
   } catch (e) {
       console.error("Scheduler Error:", e);
