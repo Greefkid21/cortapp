@@ -387,15 +387,22 @@ function MainApp() {
 
   const handleUpdateMatch = async (updated: Match) => {
     if (supabase) {
-        // Only handling status update (postponed) or basic info for now?
-        // If rescheduling, we might update date.
-        // Assuming 'updated' has the new values.
-        await supabase.from('matches').update({
+        const { error } = await supabase.from('matches').update({
             date: updated.date,
             status: updated.status,
-            winner: updated.winner
+            winner: updated.winner,
+            team1_player1_id: updated.team1[0],
+            team1_player2_id: updated.team1[1],
+            team2_player1_id: updated.team2[0],
+            team2_player2_id: updated.team2[1]
         }).eq('id', updated.id);
         
+        if (error) {
+            console.error('Error updating match:', error);
+            alert('Failed to update match: ' + error.message);
+            return;
+        }
+
         setMatches(prev => prev.map(m => (m.id === updated.id ? updated : m)));
     } else {
         setMatches(prev => prev.map(m => (m.id === updated.id ? updated : m)));

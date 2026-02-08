@@ -21,6 +21,8 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [newDate, setNewDate] = useState<string>('');
   const [newStatus, setNewStatus] = useState<Match['status']>('scheduled');
+  const [editTeam1, setEditTeam1] = useState<string[]>([]);
+  const [editTeam2, setEditTeam2] = useState<string[]>([]);
   const [leagueStartDate, setLeagueStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isGenerating, setIsGenerating] = useState(false);
   
@@ -76,13 +78,21 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
     setRescheduleId(m.id);
     setNewDate(m.date);
     setNewStatus(m.status);
+    setEditTeam1([...m.team1]);
+    setEditTeam2([...m.team2]);
   };
 
   const applyReschedule = () => {
     if (!rescheduleId || !onUpdateMatch) return;
     const m = matches.find(mm => mm.id === rescheduleId);
     if (!m) return;
-    onUpdateMatch({ ...m, date: newDate || m.date, status: newStatus });
+    onUpdateMatch({ 
+        ...m, 
+        date: newDate || m.date, 
+        status: newStatus,
+        team1: editTeam1,
+        team2: editTeam2
+    });
     setRescheduleId(null);
     setNewDate('');
   };
@@ -233,7 +243,7 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                                         onClick={() => startReschedule(match)}
                                         className="flex items-center gap-1 text-amber-700 font-bold hover:text-amber-800"
                                         >
-                                        Reschedule
+                                        Edit
                                         </button>
                                     )}
                                     <button 
@@ -274,7 +284,7 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
       {rescheduleId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">Reschedule Match</h3>
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Edit Match</h3>
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-bold text-slate-700">Scheduled Date</label>
@@ -296,6 +306,58 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                   <option value="postponed">Postponed</option>
                 </select>
               </div>
+
+              {/* Player Editing Section */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <h4 className="text-sm font-bold text-slate-800">Edit Lineup</h4>
+                
+                {/* Team 1 */}
+                <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Team 1</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {[0, 1].map(idx => (
+                            <select
+                                key={`t1-${idx}`}
+                                value={editTeam1[idx]}
+                                onChange={(e) => {
+                                    const newTeam = [...editTeam1];
+                                    newTeam[idx] = e.target.value;
+                                    setEditTeam1(newTeam);
+                                }}
+                                className="w-full p-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-1 focus:ring-primary outline-none"
+                            >
+                                {players.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Team 2 */}
+                <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Team 2</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {[0, 1].map(idx => (
+                            <select
+                                key={`t2-${idx}`}
+                                value={editTeam2[idx] || ''}
+                          onChange={(e) => {
+                              const newTeam = [...editTeam2];
+                              newTeam[idx] = e.target.value;
+                              setEditTeam2(newTeam);
+                          }}
+                                className="w-full p-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-1 focus:ring-primary outline-none"
+                            >
+                                {players.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        ))}
+                    </div>
+                </div>
+              </div>
+              
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setRescheduleId(null)}
