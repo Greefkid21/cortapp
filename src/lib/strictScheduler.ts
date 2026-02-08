@@ -1,357 +1,513 @@
 import { Player, Match } from '../types';
 
-interface SchedulerStats {
+// ---------------------------------------------------------------------------
+// TYPES
+// ---------------------------------------------------------------------------
+
+export interface StrictModeStats {
   maxOpponentRepeat: number;
   minOpponentRepeat: number;
-  opponentCountHistogram: Record<number, number>;
-  topRepeatedPairs: { p1: string; p2: string; count: number }[];
+  opponentCountHistogram: Record<string, number>; // "0":x, "1":y, ...
   cost: number;
+  seeded_3x_summary: {
+    total: number;
+    topTop: number;   // Both in top quartile
+    topMid: number;   // Top vs Mid
+    midMid: number;   // Both Mid
+    midLow: number;   // Mid vs Bottom
+    lowLow: number;   // Both Bottom
+    topLow: number;   // Top vs Bottom (Should be minimized)
+  };
+  per_player_strength_of_schedule: Array<{
+    id: string;
+    seed: number;
+    avg_opponent_seed: number;
+    matches_vs_top_quartile: number;
+    matches_vs_bottom_quartile: number;
+  }>;
 }
 
-interface StrictSchedulerResult {
-  matches: Match[];
-  stats: SchedulerStats;
+export interface StrictModeResult {
+  ok: boolean;
+  fixtures?: Match[][];
+  stats?: StrictModeStats;
+  explanation?: string;
+  error?: {
+    code: string;
+    message: string;
+  };
 }
+
+// ---------------------------------------------------------------------------
+// HELPER: SEED UTILS
+// ---------------------------------------------------------------------------
+
+function getSeedMetrics(players: Player[]) {
+  // Check if seeds exist
+  const seeds = players.map(p => p.seed).filter(s => s !== undefined) as number[];
+  const maxSeed = seeds.length > 0 ? Math.max(...seeds, 1) : 1;
+  const minSeed = seeds.length > 0 ? Math.min(...seeds, 1) : 1;
+  
+  // Create quick lookup for player index -> seed
+  // We assume players are 0..N-1 in the internal logic, so we map input array index to seed
+  const pSeeds = players.map(p => p.seed || 999);
+
+  // Normalization functions
+  // seedNorm(i): 1.0 = strongest (seed 1), 0.0 = weakest (maxSeed)
+  const seedNorm = (idx: number) => {
+    if (maxSeed === minSeed) return 0.5;
+    return (maxSeed - pSeeds[idx]) / (maxSeed - minSeed);
+  };
+
+  return { maxSeed, minSeed, pSeeds, seedNorm };
+}
+
+// ---------------------------------------------------------------------------
+// CORE SCHEDULER
+// ---------------------------------------------------------------------------
 
 export function generateStrictSchedule(
   players: Player[], 
-  startDate: string,
-  maxTimeMs: number = 800
-): StrictSchedulerResult {
+  startDate: string, // Unused logic-wise but kept for signature compatibility if needed
+  maxTimeMs: number = 500
+): StrictModeResult {
   const N = players.length;
+  const startTime = Date.now();
 
-  // 1. Strict Mode Eligibility
-  if (N < 4 || N % 4 !== 0) {
-    throw new Error(`Strict mode requires N >= 4 and divisible by 4 (e.g., 4, 8, 12, 16). Received ${N}.`);
+  // 1. ELIGIBILITY CHECKS
+  if (N % 4 !== 0) {
+    return {
+      ok: false,
+      error: {
+        code: "STRICT_MODE_REQUIRES_N_DIV_4",
+        message: `Strict mode requires N divisible by 4 (e.g., 12, 16, 20). You provided ${N}.`
+      }
+    };
+  }
+  
+  // Check seeds
+  const missingSeeds = players.some(p => p.seed === undefined || p.seed === null);
+  if (missingSeeds) {
+    return {
+      ok: false,
+      error: {
+        code: "MISSING_SEEDS",
+        message: "All players must have a seed for seeded strict mode."
+      }
+    };
   }
 
-  const playerIds = players.map(p => p.id);
-  // Map player IDs to 0..N-1 for internal calculation
-  const idToIndex = new Map<string, number>();
-  const indexToId = new Map<number, string>();
-  playerIds.forEach((id, i) => {
-    idToIndex.set(id, i);
-    indexToId.set(i, id);
+  // 2. PREPARE DATA
+  const { pSeeds, seedNorm } = getSeedMetrics(players);
+
+  // Precompute pair metrics for cost function
+  // seedDistance(i,j) = abs(norm(i) - norm(j)) -> 0=same level, 1=max diff
+  // topness(i,j) = (norm(i) + norm(j)) / 2 -> 1=both top, 0=both bottom
+  const pairMetrics = new Array(N).fill(0).map(() => new Array(N).fill(null));
+  
+  for(let i=0; i<N; i++) {
+    for(let j=0; j<N; j++) {
+      if (i === j) continue;
+      const normI = seedNorm(i);
+      const normJ = seedNorm(j);
+      const dist = Math.abs(normI - normJ);
+      const top = (normI + normJ) / 2;
+      pairMetrics[i][j] = { dist, top };
+    }
+  }
+
+  // Cost Function
+  const getPairCost = (i: number, j: number, count: number): number => {
+    // Hard penalties based on counts - INCREASED MAGNITUDE
+    // User requested base 50/100 for 0/4+, and 1 for 1/3.
+    // We scale these up to ensure hard constraints are strictly respected by the optimizer.
+    if (count === 2) return 0; // Ideal
+    if (count === 0) return 30000; // Must avoid (User base 50 -> Scaled)
+    if (count === 4) return 40000; // Forbidden (User base 100 -> Scaled)
+    if (count > 4) return 100000 + (count - 3) * 10000; // Absolutely Forbidden
+
+    const { dist, top } = pairMetrics[i][j];
+
+    // Seed-weighted penalty for 3x
+    if (count === 3) {
+      // User formula: penalty *= (1 + seedDistance_norm - 0.6 * topness)
+      // Base penalty 1000 (Scaled from 1)
+      return 1000 * (1 + dist - 0.6 * top);
+    }
+
+    // Seed-weighted penalty for 1x
+    if (count === 1) {
+      // User formula: penalty *= (1 - 0.2 * seedDistance_norm)
+      // Base penalty 500 (Scaled from 1)
+      return 500 * (1 - 0.2 * dist);
+    }
+
+    return 0;
+  };
+
+  // 3. CONSTRUCTION (Partner-Perfect Wheel)
+  // Polygon method for 1-factorization of K_N
+  const rounds: Array<Array<[number, number]>> = [];
+  const numRounds = N - 1;
+  
+  // Initialize ring 0..N-2
+  const ring = Array.from({ length: N - 1 }, (_, i) => i);
+  const fixedPoint = N - 1;
+
+  for (let r = 0; r < numRounds; r++) {
+    const roundPairs: [number, number][] = [];
+    
+    // Pair with center
+    roundPairs.push([ring[0], fixedPoint]);
+    
+    // Pair others
+    for (let k = 1; k <= (N - 2) / 2; k++) {
+      const p1 = ring[k];
+      const p2 = ring[ring.length - k];
+      roundPairs.push([p1, p2]);
+    }
+    
+    rounds.push(roundPairs);
+    
+    // Rotate ring
+    const last = ring.pop()!;
+    ring.unshift(last);
+  }
+
+  // Initial schedule
+  let schedule = rounds.map(weekPairs => {
+    const matches: [number, number][][] = [];
+    for (let i = 0; i < weekPairs.length; i += 2) {
+      matches.push([weekPairs[i], weekPairs[i+1]]);
+    }
+    return matches;
   });
 
-  // 2. Deterministic Partner Construction (Polygon Method)
-  // Generates N-1 rounds. Each round has N/2 pairs.
-  // Each pair is a Team.
-  const roundsOfTeams = generatePolygonRounds(N);
+  // 4. OPTIMIZATION (Hill Climbing with Random Restarts)
+  
+  const calculateTotalCostFromCounts = (counts: number[][]) => {
+    let cost = 0;
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        cost += getPairCost(i, j, counts[i][j]);
+      }
+    }
+    return cost;
+  };
 
-  // 3. Optimization (Matchup Assignment)
-  // We need to partition N/2 teams into N/4 matches for each round.
-  const bestSchedule = optimizeMatchups(roundsOfTeams, N, maxTimeMs);
+  const matchesPerWeek = N / 4;
+  let globalBestSchedule = JSON.parse(JSON.stringify(schedule));
+  let globalBestCost = Infinity;
 
-  // 4. Convert to Match Objects
-  const matches: Match[] = [];
-  const dateObj = new Date(startDate);
+  // Initial cost check
+  const opponentCounts = Array(N).fill(0).map(() => Array(N).fill(0));
+  const updateCounts = (sched: [number, number][][][], op: 'add' | 'sub', countsMatrix: number[][]) => {
+      const val = op === 'add' ? 1 : -1;
+      for (const week of sched) {
+        for (const match of week) {
+          const t1 = match[0];
+          const t2 = match[1];
+          // Opponents are t1 vs t2
+          // t1[0] vs t2[0], t1[0] vs t2[1], t1[1] vs t2[0], t1[1] vs t2[1]
+          countsMatrix[t1[0]][t2[0]] += val; countsMatrix[t2[0]][t1[0]] += val;
+          countsMatrix[t1[0]][t2[1]] += val; countsMatrix[t2[1]][t1[0]] += val;
+          countsMatrix[t1[1]][t2[0]] += val; countsMatrix[t2[0]][t1[1]] += val;
+          countsMatrix[t1[1]][t2[1]] += val; countsMatrix[t2[1]][t1[1]] += val;
+        }
+      }
+  };
+  
+  // Optimization Loop
+  while ((Date.now() - startTime) < maxTimeMs) {
+    // 4a. Random Initial State (Shuffle matches within weeks)
+    const currentSchedule = rounds.map(weekPairs => {
+      const shuffled = [...weekPairs].sort(() => Math.random() - 0.5);
+      const matches: [number, number][][] = [];
+      for (let i = 0; i < shuffled.length; i += 2) {
+        matches.push([shuffled[i], shuffled[i+1]]);
+      }
+      return matches;
+    });
 
-  bestSchedule.weeks.forEach((weekMatches, weekIdx) => {
-    // Calculate date for this week
-    const weekDate = new Date(dateObj);
-    weekDate.setDate(weekDate.getDate() + (weekIdx * 7));
-    const dateStr = weekDate.toISOString().split('T')[0];
+    const currentCounts = Array(N).fill(0).map(() => Array(N).fill(0));
+    updateCounts(currentSchedule, 'add', currentCounts);
+    let currentCost = calculateTotalCostFromCounts(currentCounts);
 
-    weekMatches.forEach((matchTeams, matchIdx) => {
-      const t1Indices = matchTeams[0];
-      const t2Indices = matchTeams[1];
+    // 4b. Local Search
+    let localImprovement = true;
+    let localIter = 0;
+    const maxLocalIter = 10000; // Increased iterations from 2500
 
-      matches.push({
-        id: `strict-${weekIdx}-${matchIdx}-${Math.random().toString(36).substr(2, 9)}`,
-        date: dateStr,
-        team1: [indexToId.get(t1Indices[0])!, indexToId.get(t1Indices[1])!],
-        team2: [indexToId.get(t2Indices[0])!, indexToId.get(t2Indices[1])!],
+    while (localImprovement && localIter < maxLocalIter && (Date.now() - startTime) < maxTimeMs) {
+        localImprovement = false;
+        localIter++;
+
+        // Pick a random week
+        const w = Math.floor(Math.random() * numRounds);
+        const week = currentSchedule[w];
+        if (matchesPerWeek < 2) break;
+
+        // Try multiple random swaps per iteration
+        for(let k=0; k<15; k++) { // Increased swap attempts
+            const m1Idx = Math.floor(Math.random() * matchesPerWeek);
+            let m2Idx = Math.floor(Math.random() * matchesPerWeek);
+            while (m2Idx === m1Idx) m2Idx = Math.floor(Math.random() * matchesPerWeek);
+            
+            const match1 = week[m1Idx];
+            const match2 = week[m2Idx];
+
+            // Pick random slots to swap (0 or 1)
+            const slot1 = Math.random() < 0.5 ? 0 : 1;
+            const slot2 = Math.random() < 0.5 ? 0 : 1;
+
+            const t1_stay = match1[1 - slot1];
+            const t1_move = match1[slot1];
+            const t2_stay = match2[1 - slot2];
+            const t2_move = match2[slot2];
+
+            // Helper to calc delta cost for swapping t1_move and t2_move
+            const getMatchDelta = () => {
+                let delta = 0;
+                
+                // Remove current: (t1_stay vs t1_move) and (t2_stay vs t2_move)
+                // Add new: (t1_stay vs t2_move) and (t2_stay vs t1_move)
+                
+                // For match1 (removing)
+                const pairsRemove1 = [[t1_stay[0], t1_move[0]], [t1_stay[0], t1_move[1]], [t1_stay[1], t1_move[0]], [t1_stay[1], t1_move[1]]];
+                for (const [p1, p2] of pairsRemove1) {
+                    const c = currentCounts[p1][p2];
+                    delta -= getPairCost(p1, p2, c);
+                    delta += getPairCost(p1, p2, c - 1);
+                }
+
+                // For match2 (removing)
+                const pairsRemove2 = [[t2_stay[0], t2_move[0]], [t2_stay[0], t2_move[1]], [t2_stay[1], t2_move[0]], [t2_stay[1], t2_move[1]]];
+                for (const [p1, p2] of pairsRemove2) {
+                    const c = currentCounts[p1][p2];
+                    delta -= getPairCost(p1, p2, c);
+                    delta += getPairCost(p1, p2, c - 1);
+                }
+
+                // For match1 (adding t2_move)
+                const pairsAdd1 = [[t1_stay[0], t2_move[0]], [t1_stay[0], t2_move[1]], [t1_stay[1], t2_move[0]], [t1_stay[1], t2_move[1]]];
+                for (const [p1, p2] of pairsAdd1) {
+                    const c = currentCounts[p1][p2];
+                    delta -= getPairCost(p1, p2, c);
+                    delta += getPairCost(p1, p2, c + 1);
+                }
+
+                // For match2 (adding t1_move)
+                const pairsAdd2 = [[t2_stay[0], t1_move[0]], [t2_stay[0], t1_move[1]], [t2_stay[1], t1_move[0]], [t2_stay[1], t1_move[1]]];
+                for (const [p1, p2] of pairsAdd2) {
+                    const c = currentCounts[p1][p2];
+                    delta -= getPairCost(p1, p2, c);
+                    delta += getPairCost(p1, p2, c + 1);
+                }
+                
+                return delta;
+            };
+
+            const delta = getMatchDelta();
+
+            // Accept improvement OR Simulated Annealing
+            // If delta < 0, we improve (cost goes down).
+            // If delta > 0, we degrade.
+            // SA Probability: exp(-delta / Temp). 
+            // We use a simplified constant factor here.
+            // Since penalties are huge (50000), we only want to accept bad moves if they are small (seed optimizations).
+            // If delta is huge (e.g. creating a 0 or 4), prob should be 0.
+            
+            let accept = false;
+            if (delta < 0) {
+                accept = true;
+            } else {
+                 // Only allow uphill moves if they are "small" (seed adjustments, < 100)
+                 if (delta < 100 && Math.random() < Math.exp(-delta * 0.5)) {
+                    accept = true;
+                 }
+            }
+
+            if (accept) {
+                // Apply move
+                // Update counts
+                const pairsRemove = [
+                    ...[[t1_stay[0], t1_move[0]], [t1_stay[0], t1_move[1]], [t1_stay[1], t1_move[0]], [t1_stay[1], t1_move[1]]],
+                    ...[[t2_stay[0], t2_move[0]], [t2_stay[0], t2_move[1]], [t2_stay[1], t2_move[0]], [t2_stay[1], t2_move[1]]]
+                ];
+                for(const [p1, p2] of pairsRemove) {
+                    currentCounts[p1][p2]--; currentCounts[p2][p1]--;
+                }
+                
+                const pairsAdd = [
+                    ...[[t1_stay[0], t2_move[0]], [t1_stay[0], t2_move[1]], [t1_stay[1], t2_move[0]], [t1_stay[1], t2_move[1]]],
+                    ...[[t2_stay[0], t1_move[0]], [t2_stay[0], t1_move[1]], [t2_stay[1], t1_move[0]], [t2_stay[1], t1_move[1]]]
+                ];
+                for(const [p1, p2] of pairsAdd) {
+                    currentCounts[p1][p2]++; currentCounts[p2][p1]++;
+                }
+
+                // Swap in schedule
+                match1[slot1] = t2_move;
+                match2[slot2] = t1_move;
+                
+                currentCost += delta;
+                localImprovement = true;
+            }
+        }
+    }
+
+    if (currentCost < globalBestCost) {
+        globalBestCost = currentCost;
+        globalBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
+    }
+  }
+
+  // Use Best Schedule
+  schedule = globalBestSchedule;
+  
+  // Recompute final counts for stats
+  // Reset opponentCounts
+  for(let i=0; i<N; i++) for(let j=0; j<N; j++) opponentCounts[i][j] = 0;
+  updateCounts(schedule, 'add', opponentCounts);
+
+  // 5. VALIDATION & STATS
+  const stats: StrictModeStats = {
+    maxOpponentRepeat: 0,
+    minOpponentRepeat: 999,
+    opponentCountHistogram: {},
+    cost: globalBestCost,
+    seeded_3x_summary: {
+      total: 0,
+      topTop: 0, topMid: 0, midMid: 0, midLow: 0, lowLow: 0, topLow: 0
+    },
+    per_player_strength_of_schedule: []
+  };
+
+  let valid = true;
+  let validationError = "";
+
+  // Check Fairness Floors
+  for (let i = 0; i < N; i++) {
+    for (let j = i + 1; j < N; j++) {
+      const c = opponentCounts[i][j];
+      stats.maxOpponentRepeat = Math.max(stats.maxOpponentRepeat, c);
+      stats.minOpponentRepeat = Math.min(stats.minOpponentRepeat, c);
+      
+      const k = String(c);
+      stats.opponentCountHistogram[k] = (stats.opponentCountHistogram[k] || 0) + 1;
+
+      // Fail if < 1 or > 3
+      if (c < 1 || c > 3) {
+        valid = false;
+        validationError = `Opponent count violation: Player ${i+1} vs ${j+1} played ${c} times (must be 1-3).`;
+      }
+
+      // Seed stats for 3x
+      if (c === 3) {
+        stats.seeded_3x_summary.total++;
+        const s1 = seedNorm(i);
+        const s2 = seedNorm(j);
+        
+        // Categorize
+        // Quartiles approx: Top > 0.66, Mid 0.33-0.66, Low < 0.33
+        const q1 = s1 > 0.66 ? 'T' : (s1 < 0.33 ? 'L' : 'M');
+        const q2 = s2 > 0.66 ? 'T' : (s2 < 0.33 ? 'L' : 'M');
+        const combo = [q1, q2].sort().join('');
+        
+        if (combo === 'TT') stats.seeded_3x_summary.topTop++;
+        else if (combo === 'TM') stats.seeded_3x_summary.topMid++;
+        else if (combo === 'MM') stats.seeded_3x_summary.midMid++;
+        else if (combo === 'LM') stats.seeded_3x_summary.midLow++;
+        else if (combo === 'LL') stats.seeded_3x_summary.lowLow++;
+        else if (combo === 'LT') stats.seeded_3x_summary.topLow++;
+      }
+    }
+  }
+
+  // Player Strength of Schedule
+  stats.per_player_strength_of_schedule = players.map((p, idx) => {
+    let oppSeedsSum = 0;
+    let oppCount = 0;
+    let vsTop = 0;
+    let vsBot = 0;
+    
+    for (let oppIdx = 0; oppIdx < N; oppIdx++) {
+      if (idx === oppIdx) continue;
+      const cnt = opponentCounts[idx][oppIdx];
+      if (cnt > 0) {
+        oppSeedsSum += (pSeeds[oppIdx] * cnt);
+        oppCount += cnt;
+        if (seedNorm(oppIdx) > 0.66) vsTop += cnt;
+        if (seedNorm(oppIdx) < 0.33) vsBot += cnt;
+      }
+    }
+    
+    return {
+      id: p.id,
+      seed: pSeeds[idx],
+      avg_opponent_seed: oppCount > 0 ? parseFloat((oppSeedsSum / oppCount).toFixed(2)) : 0,
+      matches_vs_top_quartile: vsTop,
+      matches_vs_bottom_quartile: vsBot
+    };
+  });
+
+  if (!valid) {
+    return {
+      ok: false,
+      error: {
+        code: "FAIRNESS_VALIDATION_FAILED",
+        message: validationError
+      },
+      stats // Return stats even on failure for debugging
+    };
+  }
+
+  // 6. FORMAT OUTPUT
+  const fixtures: Match[][] = schedule.map((weekMatches, wIdx) => {
+    return weekMatches.map((m, mIdx) => {
+      // Map indices back to Player IDs
+      return {
+        id: `w${wIdx+1}-m${mIdx+1}`,
+        team1: [players[m[0][0]].id, players[m[0][1]].id],
+        team2: [players[m[1][0]].id, players[m[1][1]].id],
+        round: wIdx + 1,
+        date: new Date(startDate).toISOString(), // Placeholder
+        court: mIdx + 1,
         sets: [],
         winner: null,
         status: 'scheduled'
-      });
+      };
     });
   });
 
+  // Explanation
+  const avgSeed = stats.per_player_strength_of_schedule.reduce((acc, p) => acc + p.avg_opponent_seed, 0) / N;
+  const hardSchedulePlayers = stats.per_player_strength_of_schedule
+    .filter(p => p.avg_opponent_seed < avgSeed - 1.0) // Lower avg seed = Harder opponents
+    .map(p => p.id);
+  const easySchedulePlayers = stats.per_player_strength_of_schedule
+    .filter(p => p.avg_opponent_seed > avgSeed + 1.0) // Higher avg seed = Easier opponents
+    .map(p => p.id);
+
+  let explanation = `
+Generated strict mode schedule for ${N} players.
+- Constraints: All hard constraints met (Partner rotation, No byes).
+- Fairness: Opponent repeats bounded between ${stats.minOpponentRepeat} and ${stats.maxOpponentRepeat}.
+- Seed Logic: 3x repeats biased towards similar skill levels. 
+  (Top-Top: ${stats.seeded_3x_summary.topTop}, Top-Low: ${stats.seeded_3x_summary.topLow}).
+`.trim();
+
+  if (hardSchedulePlayers.length > 0) {
+      explanation += `\n- Note: Players ${hardSchedulePlayers.join(', ')} have a harder than average schedule.`;
+  }
+  if (easySchedulePlayers.length > 0) {
+      explanation += `\n- Note: Players ${easySchedulePlayers.join(', ')} have an easier than average schedule.`;
+  }
+
   return {
-    matches,
-    stats: bestSchedule.stats
+    ok: true,
+    fixtures,
+    stats,
+    explanation
   };
-}
-
-// --- Internal Logic ---
-
-// Represents a Week: Array of Matches. Each Match is [TeamA, TeamB].
-// Team is [p1, p2] (indices).
-type Team = [number, number];
-type Matchup = [Team, Team];
-type WeekSchedule = Matchup[];
-
-interface OptimizationResult {
-  weeks: WeekSchedule[];
-  stats: SchedulerStats;
-}
-
-function generatePolygonRounds(N: number): Team[][] {
-  // Polygon method for 1-factorization of K_N
-  // Fixed point: N-1.
-  // Rotating points: 0 .. N-2.
-  const rounds: Team[][] = [];
-  const numRounds = N - 1;
-  const numPairs = N / 2;
-
-  for (let r = 0; r < numRounds; r++) {
-    const roundPairs: Team[] = [];
-    
-    // 1. Pair fixed point (N-1) with current vertex r
-    roundPairs.push([N - 1, r]);
-
-    // 2. Pair others: (r-k) vs (r+k)
-    // Vertices are 0..N-2 (total N-1 vertices in polygon)
-    const m = N - 1;
-    for (let k = 1; k < numPairs; k++) {
-      const v1 = (r - k + m) % m;
-      const v2 = (r + k) % m;
-      roundPairs.push([v1, v2]);
-    }
-
-    rounds.push(roundPairs);
-  }
-
-  return rounds;
-}
-
-function getPenalty(count: number): number {
-  if (count === 2) return 0;   // Ideal
-  if (count === 1) return 1;   // Acceptable
-  if (count === 3) return 1;   // Acceptable
-  if (count === 0) return 50;  // Avoid (Very High)
-  // >= 4: Forbidden (Extreme). Add gradient so 5 is worse than 4.
-  return 100 + (count - 4) * 50;
-}
-
-function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number): OptimizationResult {
-  const getNow = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
-  const startTime = getNow();
-  const numWeeks = roundsOfTeams.length;
-  
-  // Global Best
-  let bestGlobalSchedule: WeekSchedule[] = [];
-  let bestGlobalCost = Infinity;
-  let bestGlobalStats: SchedulerStats | null = null;
-  let restarts = 0;
-
-  // Reusable buffers to avoid GC
-  const opponentCounts = new Int32Array(N * N);
-
-  // Helper to generate a random schedule from rounds
-  const generateRandomSchedule = (): WeekSchedule[] => {
-    return roundsOfTeams.map(teams => {
-      // Shuffle teams in this round
-      const shuffled = [...teams];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      
-      const matchups: Matchup[] = [];
-      for (let i = 0; i < shuffled.length; i += 2) {
-        matchups.push([shuffled[i], shuffled[i + 1]]);
-      }
-      return matchups;
-    });
-  };
-
-  // Helper to get stats from counts
-  const getStats = (counts: Int32Array, cost: number): SchedulerStats => {
-      const stats: SchedulerStats = {
-          maxOpponentRepeat: 0,
-          minOpponentRepeat: Infinity,
-          opponentCountHistogram: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
-          topRepeatedPairs: [],
-          cost: cost
-      };
-      
-      const pairsList: { p1: number, p2: number, count: number }[] = [];
-      
-      for (let i = 0; i < N; i++) {
-          for (let j = i + 1; j < N; j++) {
-              const c = counts[i * N + j];
-              if (c > stats.maxOpponentRepeat) stats.maxOpponentRepeat = c;
-              if (c < stats.minOpponentRepeat) stats.minOpponentRepeat = c;
-              const histKey = c >= 4 ? 4 : c;
-              stats.opponentCountHistogram[histKey] = (stats.opponentCountHistogram[histKey] || 0) + 1;
-              pairsList.push({ p1: i, p2: j, count: c });
-          }
-      }
-      
-      stats.topRepeatedPairs = pairsList
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 10)
-          .map(p => ({
-              p1: `Player ${p.p1}`, 
-              p2: `Player ${p.p2}`,
-              count: p.count
-          }));
-      
-      return stats;
-  };
-
-  // Main Restart Loop
-  while ((getNow() - startTime) < maxTimeMs) {
-      restarts++;
-      
-      // 1. Initialize Random Schedule
-      const currentSchedule = generateRandomSchedule();
-      
-      // 2. Initialize Counts & Cost
-      opponentCounts.fill(0);
-      
-      // Base penalty for all 0s
-      // Total pairs = N*(N-1)/2. 
-      // Cost = TotalPairs * penalty(0).
-      let currentCost = (N * (N - 1) / 2) * getPenalty(0);
-
-      // Update function
-      const updateMetrics = (t1: Team, t2: Team, delta: number) => {
-        const pairs = [
-          [t1[0], t2[0]], [t1[0], t2[1]],
-          [t1[1], t2[0]], [t1[1], t2[1]]
-        ];
-
-        let costChange = 0;
-        for (const [p1, p2] of pairs) {
-          const u = p1 < p2 ? p1 : p2;
-          const v = p1 < p2 ? p2 : p1;
-          const idx = u * N + v;
-          
-          const oldCount = opponentCounts[idx];
-          const oldPenalty = getPenalty(oldCount);
-          
-          const newCount = oldCount + delta;
-          opponentCounts[idx] = newCount;
-          
-          const newPenalty = getPenalty(newCount);
-          costChange += (newPenalty - oldPenalty);
-        }
-        return costChange;
-      };
-
-      // Apply initial matches
-      for (const week of currentSchedule) {
-          for (const match of week) {
-              currentCost += updateMetrics(match[0], match[1], 1);
-          }
-      }
-
-      // 3. Hill Climbing
-      let improved = true;
-      let iterations = 0;
-      const MAX_LOCAL_STEPS = 5000; // Prevent getting stuck too long in one valley
-
-      while (improved && iterations < MAX_LOCAL_STEPS && (getNow() - startTime) < maxTimeMs) {
-          improved = false;
-          iterations++;
-
-          // Try random swaps? Or iterating all swaps?
-          // Iterating all swaps is expensive if N is large, but N<=20.
-          // N=16 -> 15 weeks. 4 matches/week.
-          // Swaps per week: 4C2 = 6 pairs of matches.
-          // Total moves = 15 * 6 = 90. Tiny!
-          // We can exhaustively check all neighbors!
-
-          // Iterate all weeks
-          for (let w = 0; w < numWeeks; w++) {
-              const week = currentSchedule[w];
-              // Iterate all pairs of matches
-              for (let m1 = 0; m1 < week.length; m1++) {
-                  for (let m2 = m1 + 1; m2 < week.length; m2++) {
-                      
-                      const matchA = week[m1];
-                      const matchB = week[m2];
-                      
-                      const tA = matchA[0];
-                      const tB = matchA[1];
-                      const tC = matchB[0];
-                      const tD = matchB[1];
-
-                      // Remove old
-                      let baseDelta = 0;
-                      baseDelta += updateMetrics(tA, tB, -1);
-                      baseDelta += updateMetrics(tC, tD, -1);
-
-                      // Try Swap 1: (A, C), (B, D)
-                      let d1 = baseDelta;
-                      d1 += updateMetrics(tA, tC, 1);
-                      d1 += updateMetrics(tB, tD, 1);
-                      
-                      // Revert
-                      updateMetrics(tA, tC, -1);
-                      updateMetrics(tB, tD, -1);
-
-                      // Try Swap 2: (A, D), (C, B)
-                      let d2 = baseDelta;
-                      d2 += updateMetrics(tA, tD, 1);
-                      d2 += updateMetrics(tC, tB, 1);
-                      
-                      // Revert
-                      updateMetrics(tA, tD, -1);
-                      updateMetrics(tC, tB, -1);
-
-                      // Restore original state for now (to apply best)
-                      updateMetrics(tA, tB, 1);
-                      updateMetrics(tC, tD, 1);
-
-                      // Apply best if improvement
-                      if (d1 < 0 && d1 <= d2) {
-                          // Apply Swap 1
-                          updateMetrics(tA, tB, -1);
-                          updateMetrics(tC, tD, -1);
-                          updateMetrics(tA, tC, 1);
-                          updateMetrics(tB, tD, 1);
-                          currentCost += d1;
-                          
-                          week[m1] = [tA, tC];
-                          week[m2] = [tB, tD];
-                          improved = true;
-                      } else if (d2 < 0) {
-                          // Apply Swap 2
-                          updateMetrics(tA, tB, -1);
-                          updateMetrics(tC, tD, -1);
-                          updateMetrics(tA, tD, 1);
-                          updateMetrics(tC, tB, 1);
-                          currentCost += d2;
-                          
-                          week[m1] = [tA, tD];
-                          week[m2] = [tC, tB];
-                          improved = true;
-                      }
-                  }
-              }
-          }
-      }
-
-      // 4. Update Global Best
-      if (currentCost < bestGlobalCost) {
-          bestGlobalCost = currentCost;
-          // Deep copy schedule
-          bestGlobalSchedule = currentSchedule.map(w => w.map(m => [m[0], m[1]]));
-          bestGlobalStats = getStats(opponentCounts, currentCost);
-      }
-      
-      // Check for perfection (all 2s -> cost 0)
-      if (currentCost === 0) break;
-  }
-  
-  // If no valid schedule found (shouldn't happen), return initial
-  if (!bestGlobalStats) {
-       // Should not happen as we run at least once
-       return { weeks: [], stats: { cost: Infinity, maxOpponentRepeat: 0, minOpponentRepeat: 0, opponentCountHistogram: {}, topRepeatedPairs: [] } };
-  }
-
-  console.log(`Optimization finished. Restarts: ${restarts}. Best Cost: ${bestGlobalCost}`);
-  
-  // 4. Final Validation
-  const { maxOpponentRepeat, minOpponentRepeat } = bestGlobalStats;
-  if (minOpponentRepeat < 1 || maxOpponentRepeat > 3) {
-      throw new Error(`Fairness validation failed: Opponent repeats must be between 1 and 3. Found range [${minOpponentRepeat}, ${maxOpponentRepeat}].`);
-  }
-
-  return { weeks: bestGlobalSchedule, stats: bestGlobalStats };
 }

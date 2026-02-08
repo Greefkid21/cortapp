@@ -19,6 +19,7 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(players.map(p => p.id));
   const [generated, setGenerated] = useState<Match[]>([]);
   const [stats, setStats] = useState<any>(null);
+  const [explanation, setExplanation] = useState<string>('');
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [newDate, setNewDate] = useState<string>('');
   const [newStatus, setNewStatus] = useState<Match['status']>('scheduled');
@@ -40,20 +41,33 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
     worker.onmessage = (e) => {
         const { type, payload } = e.data;
         if (type === 'SUCCESS') {
+            if (payload.error) {
+                alert(`Generation Error: ${payload.error.message}`);
+                console.error("Scheduler Error:", payload.error);
+                setIsGenerating(false);
+                worker.terminate();
+                return;
+            }
+
             if (payload.matches && Array.isArray(payload.matches)) {
                 setGenerated(payload.matches);
                 if (payload.stats) {
                     setStats(payload.stats);
                     console.log('Schedule Stats:', payload.stats);
                 }
+                if (payload.explanation) {
+                    setExplanation(payload.explanation);
+                }
             } else if (Array.isArray(payload)) {
                 // Legacy fallback
                 setGenerated(payload);
                 setStats(null);
+                setExplanation('');
             }
         } else {
             console.error('Error generating schedule:', payload);
-            alert('An error occurred while generating the schedule. Please check the console.');
+            const msg = payload?.message || 'An error occurred while generating the schedule.';
+            alert(msg);
         }
         setIsGenerating(false);
         worker.terminate();
@@ -75,6 +89,18 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
         setIsGenerating(false);
         worker.terminate();
         return;
+    }
+
+    // STRICT MODE VALIDATION (Client-side pre-check)
+    if (activePlayers.length % 4 === 0) {
+        // Check for missing seeds
+        const missingSeeds = activePlayers.filter(p => p.seed === undefined);
+        if (missingSeeds.length > 0) {
+             alert(`Strict Mode (N=${activePlayers.length}) requires all players to have a seed.\n\nMissing seeds for: ${missingSeeds.map(p => p.name).join(', ')}`);
+             setIsGenerating(false);
+             worker.terminate();
+             return;
+        }
     }
     
     worker.postMessage({ players: activePlayers, startDate: leagueStartDate });
@@ -139,6 +165,7 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                             className="rounded text-primary focus:ring-primary"
                         />
                         {p.name}
+                        {p.seed !== undefined && <span className="text-xs text-slate-400 ml-1">(Seed: {p.seed})</span>}
                     </label>
                 ))}
             </div>
@@ -184,10 +211,20 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                                 <p>Max Opponent Repeat: <span className="font-mono font-bold">{stats.maxOpponentRepeat}</span></p>
                                 <p>Min Opponent Repeat: <span className="font-mono font-bold">{stats.minOpponentRepeat}</span></p>
                                 <p>Total Cost: <span className="font-mono">{stats.cost}</span></p>
+                                {stats.seeded_3x_summary && (
+                                  <div className="pt-2 mt-2 border-t border-slate-200 text-[10px]">
+                                    <p className="font-semibold mb-1">Seeded 3x Repeats:</p>
+                                    <div className="grid grid-cols-2 gap-x-2">
+                                        <p>Top-Top: {stats.seeded_3x_summary.topTop}</p>
+                                        <p>Top-Low: {stats.seeded_3x_summary.topLow}</p>
+                                        <p>Total: {stats.seeded_3x_summary.total}</p>
+                                    </div>
+                                  </div>
+                                )}
                             </div>
                             <div>
                                 <p className="mb-1 font-semibold">Opponent Frequency (Pairs):</p>
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-2 mb-2">
                                     {Object.entries(stats.opponentCountHistogram || {}).map(([k, v]) => (
                                         <div key={k} className="bg-white px-2 py-1 rounded border border-slate-100 shadow-sm flex items-center gap-1">
                                             <span className="font-bold text-slate-800">{k}x:</span> 
@@ -195,6 +232,11 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                                         </div>
                                     ))}
                                 </div>
+                                {explanation && (
+                                    <div className="p-2 bg-blue-50 text-blue-800 rounded border border-blue-100 text-[10px] whitespace-pre-wrap leading-tight">
+                                        {explanation}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -1,6 +1,7 @@
 export interface Player {
   id: string;
   name: string;
+  seed?: number; // 1 = strongest, higher = weaker
   avatar?: string;
   stats: {
     matchesPlayed: number;

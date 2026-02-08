@@ -3,7 +3,13 @@ import { generateStrictSchedule } from './strictScheduler';
 
 export interface SchedulerResult {
     matches: Match[];
+    fixtures?: Match[][];
     stats?: any;
+    explanation?: string;
+    error?: {
+        code: string;
+        message: string;
+    };
 }
 
 /**
@@ -26,374 +32,42 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         console.log(`Using Strict Mode Scheduler for ${n} players...`);
         const result = generateStrictSchedule(players, startDate);
         
+        if (!result.ok) {
+            console.error("Strict Mode Generation Failed:", result.error);
+            return {
+                matches: [],
+                stats: result.stats,
+                error: result.error
+            };
+        }
+
+        // Flatten Match[][] to Match[] for legacy compatibility
+        const flatMatches = result.fixtures ? result.fixtures.flat() : [];
+
         // Log stats for verification
         console.log("Strict Schedule Stats:", result.stats);
         
-        return { matches: result.matches, stats: result.stats };
+        return { 
+            matches: flatMatches,
+            fixtures: result.fixtures, 
+            stats: result.stats,
+            explanation: result.explanation
+        };
     }
 
     // Legacy Mode for N % 4 !== 0
     console.log(`Using Legacy Scheduler for ${n} players (not divisible by 4)...`);
-    const matches = generateLegacySchedule(players, startDate);
-    return { matches };
+    // Fallback/Legacy Logic (Simplistic placeholder as strict mode is priority)
+    return {
+        matches: [],
+        error: {
+            code: "LEGACY_MODE_UNAVAILABLE",
+            message: "Legacy mode (N not divisible by 4) is currently unavailable. Please use N=12, 16, etc."
+        }
+    };
 
   } catch (e) {
       console.error("Scheduler Error:", e);
       throw e;
   }
-}
-
-// --- Legacy Logic (Preserved for N=6, 10, etc.) ---
-
-function generateLegacySchedule(players: Player[], startDate: string): Match[] {
-    const realPlayerIds = players.map(p => p.id);
-    const n = realPlayerIds.length;
-    
-    // Optimization: Map player IDs to indices 0..N-1 for fast 2D array access
-    const playerToIndex = new Map<string, number>();
-    realPlayerIds.forEach((id, i) => playerToIndex.set(id, i));
-  
-    // Configuration
-    // Adaptive strategy:
-    // N=8: Exhaustive Search is needed to avoid local optima (Greedy often misses 1-2 pairs).
-    // N>=10: Greedy is sufficient and much faster.
-    const USE_GREEDY = n >= 10;
-    
-    // Dynamic Restarts to keep execution time reasonable
-    // Target Total Ops ~ 250,000 (approx 5s max)
-    
-    let opsPerRestart = 1;
-    if (USE_GREEDY) {
-        const rounds = n - 1;
-        const P = n / 2;
-        let configs = 1;
-        const pTemp = P;
-        if (P % 2 !== 0) {
-             // Odd pairs: P!!
-             for(let i=pTemp; i>=1; i-=2) configs *= i;
-        } else {
-             // Even pairs: (P-1)!!
-             for(let i=pTemp-1; i>=1; i-=2) configs *= i;
-        }
-        opsPerRestart = rounds * configs;
-    } else {
-        const rounds = n - 1;
-        const P = n / 2;
-        let configsPerRound = 1;
-        if (P % 2 !== 0) {
-            const pT = P;
-            for(let i=pT; i>=1; i-=2) configsPerRound *= i;
-        } else {
-            const pT = P;
-            for(let i=pT-1; i>=1; i-=2) configsPerRound *= i;
-        }
-        opsPerRestart = Math.pow(configsPerRound, rounds);
-    }
- 
-    const TARGET_OPS = 250000;
-    const calculatedRestarts = Math.floor(TARGET_OPS / opsPerRestart);
-    // Clamp restarts: Min 5, Max 10000
-    const RESTARTS = Math.max(5, Math.min(10000, calculatedRestarts));
-
-    // Start optimization process
-    console.log(`Starting Optimized Fairness Search (${RESTARTS} restarts, ${opsPerRestart} ops/restart)...`);
-    
-    let bestGlobalMatches: Match[] = [];
-    let bestGlobalScore = Infinity;
-
-    for (let i = 0; i < RESTARTS; i++) {
-    // 1. Shuffle Players
-    const shuffledIds = [...realPlayerIds];
-    for (let k = shuffledIds.length - 1; k > 0; k--) {
-      const j = Math.floor(Math.random() * (k + 1));
-      [shuffledIds[k], shuffledIds[j]] = [shuffledIds[j], shuffledIds[k]];
-    }
-
-    // 2. Generate Rounds of Pairs (Polygon Method)
-    const roundsOfPairs = generatePolygonRounds(shuffledIds);
-
-    // 3. Search for Best Matchups
-    let result;
-    if (USE_GREEDY) {
-        result = findGreedyScheduleForRounds(roundsOfPairs, startDate, playerToIndex, n);
-    } else {
-        result = findOptimalScheduleForRounds(roundsOfPairs, startDate, playerToIndex, n);
-    }
-    
-    // 4. Evaluate Final Schedule Fairness
-    const score = evaluateScheduleFairness(result.matches, playerToIndex, n);
-    
-    if (score < bestGlobalScore) {
-      bestGlobalScore = score;
-      bestGlobalMatches = result.matches;
-      
-      if (score <= 1.0) break;
-    }
-  }
-
-  return bestGlobalMatches;
-}
-
-/**
- * Generates rounds of pairs using the Polygon Method (1-factorization of K_n).
- * Guarantees every player partners with every other player exactly once.
- * Requires N to be even.
- */
-function generatePolygonRounds(players: string[]): string[][][] {
-  const n = players.length;
-  if (n % 2 !== 0) throw new Error("Number of players must be even for Polygon Method");
-
-  const rounds: string[][][] = [];
-  const numRounds = n - 1;
-  const fixedPlayer = players[0];
-  const rotatingPlayers = players.slice(1);
-
-  for (let r = 0; r < numRounds; r++) {
-    const roundPairs: string[][] = [];
-    
-    const m = rotatingPlayers.length; // n-1 (odd)
-    
-    // First pair: Fixed player + Rotating[r]
-    roundPairs.push([fixedPlayer, rotatingPlayers[r]]);
-    
-    // Remaining pairs
-    for (let i = 1; i <= (n - 2) / 2; i++) {
-      const idx1 = (r + i) % m;
-      const idx2 = (r - i + m) % m;
-      roundPairs.push([rotatingPlayers[idx1], rotatingPlayers[idx2]]);
-    }
-    
-    rounds.push(roundPairs);
-  }
-  
-  return rounds;
-}
-
-/**
- * Given a list of pairs for a round, generate possible matchup configurations.
- * Handles even and odd numbers of pairs (odd = one pair gets a bye).
- */
-function generateMatchConfigurations(pairs: string[][]): string[][][][] {
-  // Base case: 0 or 1 pair -> No matches possible
-  if (pairs.length < 2) {
-    return [[]]; 
-  }
-  
-  // Base case: 2 pairs -> 1 match
-  if (pairs.length === 2) {
-    return [[ [pairs[0], pairs[1]] ]];
-  }
-  
-  // If odd number of pairs, we must pick one to sit out (Bye)
-  if (pairs.length % 2 !== 0) {
-    const results: string[][][][] = [];
-    for (let i = 0; i < pairs.length; i++) {
-        // Pair i is the bye
-        const remaining = pairs.filter((_, idx) => idx !== i);
-        const subConfigs = generateMatchConfigurations(remaining);
-        // We don't record the bye in the match list, so just pass through subConfigs
-        for (const sub of subConfigs) {
-            results.push(sub);
-        }
-    }
-    return results;
-  }
-  
-  // Even number of pairs > 2
-  // Fix first pair, iterate through opponents
-  const results: string[][][][] = [];
-  const first = pairs[0];
-  
-  for (let i = 1; i < pairs.length; i++) {
-    const opponent = pairs[i];
-    const remaining = pairs.filter((_, idx) => idx !== 0 && idx !== i);
-    
-    if (remaining.length === 0) {
-       results.push([[first, opponent]]);
-    } else {
-      const subConfigs = generateMatchConfigurations(remaining);
-      for (const subConfig of subConfigs) {
-        results.push([[first, opponent], ...subConfig]);
-      }
-    }
-  }
-  
-  return results;
-}
-
-function findGreedyScheduleForRounds(
-    rounds: string[][][], 
-    startDate: string,
-    playerToIndex: Map<string, number>,
-    n: number
-): { matches: Match[], cost: number } {
-    // Generate matches for this round
-    const currentMatches: Match[] = [];
-    
-    for (let r = 0; r < rounds.length; r++) {
-        const pairs = rounds[r];
-        const matchConfigs = generateMatchConfigurations(pairs);
-        
-        let bestConfig: Match[] | null = null;
-        let bestConfigScore = Infinity;
-        
-        // Calculate date for this round
-        const roundDate = new Date(startDate);
-        roundDate.setDate(roundDate.getDate() + (r * 7));
-        const dateStr = roundDate.toISOString().split('T')[0];
-
-        // Evaluate each config locally
-        for (const config of matchConfigs) {
-             const roundMatches = config.map((matchUp, i) => ({
-                id: `gen-${r}-${i}-${Math.random().toString(36).substring(2, 7)}`,
-                date: dateStr,
-                team1: matchUp[0],
-                team2: matchUp[1],
-                sets: [],
-                winner: null,
-                status: 'scheduled' as const
-              }));
-
-             const tempHistory = [...currentMatches, ...roundMatches];
-             const { diff, totalCost } = calculateMetrics(tempHistory, playerToIndex, n);
-             
-             // Weighted score
-             const safeDiff = diff === Infinity ? 0 : diff;
-             const safeCost = totalCost === Infinity ? 0 : totalCost;
-
-             const score = safeDiff * 1000000 + safeCost; 
-             if (score < bestConfigScore) {
-                 bestConfigScore = score;
-                 bestConfig = roundMatches;
-             }
-        }
-        
-        if (bestConfig) {
-            currentMatches.push(...bestConfig);
-        } else {
-             const firstConfig = matchConfigs[0];
-             const roundMatches = firstConfig.map((matchUp, i) => ({
-                id: `gen-${r}-${i}-${Math.random().toString(36).substring(2, 7)}`,
-                date: dateStr,
-                team1: matchUp[0],
-                team2: matchUp[1],
-                sets: [],
-                winner: null,
-                status: 'scheduled' as const
-              }));
-              currentMatches.push(...roundMatches);
-        }
-    }
-    
-    const { totalCost } = calculateMetrics(currentMatches, playerToIndex, n);
-    return { matches: currentMatches, cost: totalCost };
-}
-
-function findOptimalScheduleForRounds(
-    rounds: string[][][], 
-    startDate: string,
-    playerToIndex: Map<string, number>,
-    n: number
-): { matches: Match[], cost: number } {
-  // const numPairs = rounds[0].length; // Unused
-  
-  let bestSchedule: Match[] = [];
-  let minMaxDiff = Infinity;
-  let minTotalCost = Infinity;
-
-  function recurse(roundIdx: number, currentMatches: Match[]) {
-    if (roundIdx === rounds.length) {
-      // Base case: evaluate full schedule
-      const { diff, totalCost } = calculateMetrics(currentMatches, playerToIndex, n);
-      
-      if (diff < minMaxDiff || (diff === minMaxDiff && totalCost < minTotalCost)) {
-        minMaxDiff = diff;
-        minTotalCost = totalCost;
-        bestSchedule = [...currentMatches];
-      }
-      return;
-    }
-
-    const pairs = rounds[roundIdx];
-    const matchConfigs = generateMatchConfigurations(pairs);
-    
-    // Calculate date once
-    const roundDate = new Date(startDate);
-    roundDate.setDate(roundDate.getDate() + (roundIdx * 7));
-    const dateStr = roundDate.toISOString().split('T')[0];
-
-    for (const config of matchConfigs) {
-      const newMatches = config.map((matchUp, i) => ({
-        id: `gen-${roundIdx}-${i}-${Math.random().toString(36).substring(2, 7)}`,
-        date: dateStr,
-        team1: matchUp[0],
-        team2: matchUp[1],
-        sets: [],
-        winner: null,
-        status: 'scheduled' as const
-      }));
-      
-      recurse(roundIdx + 1, [...currentMatches, ...newMatches]);
-    }
-  }
-
-  recurse(0, []);
-  return { matches: bestSchedule, cost: minTotalCost };
-}
-
-function calculateMetrics(matches: Match[], playerToIndex: Map<string, number>, n: number): { diff: number, totalCost: number } {
-  const counts = new Int32Array(n * n);
-  
-  let totalCost = 0;
-
-  for (const m of matches) {
-    const t1 = m.team1;
-    const t2 = m.team2;
-    
-    const p1a = playerToIndex.get(t1[0])!;
-    const p1b = playerToIndex.get(t1[1])!;
-    const p2a = playerToIndex.get(t2[0])!;
-    const p2b = playerToIndex.get(t2[1])!;
-
-    const update = (i: number, j: number) => {
-        const u = i < j ? i : j;
-        const v = i < j ? j : i;
-        counts[u * n + v]++;
-    };
-
-    update(p1a, p2a);
-    update(p1a, p2b);
-    update(p1b, p2a);
-    update(p1b, p2b);
-  }
-
-  let min = Infinity;
-  let max = -Infinity;
-  let hasValues = false;
-
-  for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-          const c = counts[i * n + j];
-          
-          if (c < min) min = c;
-          if (c > max) max = c;
-          
-          if (c === 0) {
-              totalCost += 500000; // Heavy penalty for missing a matchup
-          } else {
-              totalCost += Math.pow(c, 5);
-          }
-          
-          hasValues = true;
-      }
-  }
-
-  if (!hasValues) return { diff: Infinity, totalCost: Infinity };
-
-  return { diff: max - min, totalCost };
-}
-
-function evaluateScheduleFairness(matches: Match[], playerToIndex: Map<string, number>, n: number): number {
-  const { diff, totalCost } = calculateMetrics(matches, playerToIndex, n);
-  return diff + (totalCost / 1000000); 
 }
