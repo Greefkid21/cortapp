@@ -29,13 +29,54 @@ export function generateSchedule(players: Player[], startDate: string = new Date
   
     // Configuration
     // Adaptive strategy:
-    // N <= 8: Exhaustive Search (Best quality, 3^7 = 2187 checks * 100 restarts)
-    // N > 8: Greedy Search (Good quality, avoids exponential explosion)
-    const USE_GREEDY = n > 8;
-    const RESTARTS = USE_GREEDY ? 1000 : 500; // Increased restarts for better coverage
+    // N=8: Exhaustive Search is needed to avoid local optima (Greedy often misses 1-2 pairs).
+    // N>=10: Greedy is sufficient and much faster.
+    const USE_GREEDY = n >= 10;
     
+    // Dynamic Restarts to keep execution time reasonable
+    // Target Total Ops ~ 250,000 (approx 5s max)
+    
+    let opsPerRestart = 1;
+    if (USE_GREEDY) {
+        const rounds = n - 1;
+        const P = n / 2;
+        let configs = 1;
+        let pTemp = P;
+        if (P % 2 !== 0) {
+             // Odd pairs: P!!
+             for(let i=pTemp; i>=1; i-=2) configs *= i;
+        } else {
+             // Even pairs: (P-1)!!
+             for(let i=pTemp-1; i>=1; i-=2) configs *= i;
+        }
+        opsPerRestart = rounds * configs;
+    } else {
+        // Exhaustive: 3^(n-1) is upper bound? 
+        // For N=8 (4 pairs), 7 rounds.
+        // Configs per round (4 pairs -> 2 games) = 3.
+        // Total per restart = 3^7 = 2187.
+        // For N=6 (3 pairs -> 1 game + bye), 3 configs.
+        // 3^5 = 243.
+        const rounds = n - 1;
+        const P = n / 2;
+        let configsPerRound = 1;
+        if (P % 2 !== 0) {
+            let pT = P;
+            for(let i=pT; i>=1; i-=2) configsPerRound *= i;
+        } else {
+            let pT = P;
+            for(let i=pT-1; i>=1; i-=2) configsPerRound *= i;
+        }
+        opsPerRestart = Math.pow(configsPerRound, rounds);
+    }
+ 
+    const TARGET_OPS = 250000;
+    const calculatedRestarts = Math.floor(TARGET_OPS / opsPerRestart);
+    // Clamp restarts: Min 5, Max 10000
+    const RESTARTS = Math.max(5, Math.min(10000, calculatedRestarts));
+
     // Start optimization process
-    console.log(`Starting Optimized Fairness Search (${RESTARTS} restarts)...`);
+    console.log(`Starting Optimized Fairness Search (${RESTARTS} restarts, ${opsPerRestart} ops/restart)...`);
     
     let bestGlobalMatches: Match[] = [];
     let bestGlobalScore = Infinity;
