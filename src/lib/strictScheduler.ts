@@ -10,6 +10,7 @@ export interface StrictModeStats {
   opponentCountHistogram: Record<string, number>; // "0":x, "1":y, ...
   cost: number;
   total_3x_pairs: number;
+  seededFairnessWarning?: boolean; // New flag for A-C > A-A rejection
   count_3x_by_tier: {
     AA: number;
     AB: number;
@@ -537,6 +538,13 @@ export function generateStrictSchedule(
     };
   });
 
+  // FINAL POST-GENERATION REJECTION RULE
+  // Check if (A-C 3x pairs) > (A-A 3x pairs)
+  // If so, mark as rejected (warning) if we are forced to return it.
+  if (stats.count_3x_by_tier.AC > stats.count_3x_by_tier.AA) {
+      stats.seededFairnessWarning = true;
+  }
+
   if (!valid) {
     return {
       ok: false,
@@ -602,3 +610,4 @@ Generated strict mode schedule for ${N} players.
     explanation
   };
 }
+ 
