@@ -69,6 +69,7 @@ function MainApp() {
               id: p.id,
               name: p.name,
               avatar: p.avatar,
+              seed: p.seed,
               stats: {
                 matchesPlayed: p.played || 0,
                 wins: p.wins || 0,
@@ -443,9 +444,9 @@ function MainApp() {
     }
   };
 
-  const handleAddPlayer = async (name: string, avatar?: string, email?: string) => {
+  const handleAddPlayer = async (name: string, avatar?: string, email?: string, seed?: number) => {
     if (supabase) {
-        const { data, error } = await supabase.from('players').insert([{ name, avatar }]).select().single();
+        const { data, error } = await supabase.from('players').insert([{ name, avatar, seed }]).select().single();
         
         if (error) {
             console.error('Error adding player:', error);
@@ -458,6 +459,7 @@ function MainApp() {
                 id: data.id,
                 name: data.name,
                 avatar: data.avatar,
+                seed: data.seed,
                 stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
              };
              // Use functional update to ensure fresh state
@@ -501,9 +503,9 @@ function MainApp() {
     }
   };
 
-  const handleUpdatePlayer = async (id: string, name: string, avatar?: string) => {
+  const handleUpdatePlayer = async (id: string, name: string, avatar?: string, seed?: number) => {
     if (supabase) {
-        const { error } = await supabase.from('players').update({ name, avatar }).eq('id', id);
+        const { error } = await supabase.from('players').update({ name, avatar, seed }).eq('id', id);
         
         if (error) {
             console.error('Error updating player:', error);
@@ -511,9 +513,9 @@ function MainApp() {
             return;
         }
 
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed } : p));
     } else {
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed } : p));
     }
   };
 

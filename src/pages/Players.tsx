@@ -6,8 +6,8 @@ import { Link } from 'react-router-dom';
 
 interface PlayersPageProps {
   players: Player[];
-  onAddPlayer: (name: string, avatar?: string, email?: string) => Promise<void>;
-  onUpdatePlayer: (id: string, name: string, avatar?: string) => Promise<void>;
+  onAddPlayer: (name: string, avatar?: string, email?: string, seed?: number) => Promise<void>;
+  onUpdatePlayer: (id: string, name: string, avatar?: string, seed?: number) => Promise<void>;
   onDeletePlayer: (id: string) => Promise<void>;
 }
 
@@ -16,12 +16,14 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
   const [isEditing, setIsEditing] = useState<string | null>(null); // 'new' or player ID
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editSeed, setEditSeed] = useState<number | undefined>(undefined);
   const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const startNew = () => {
     setEditName('');
     setEditEmail('');
+    setEditSeed(undefined);
     setEditAvatar(undefined);
     setIsEditing('new');
   };
@@ -29,6 +31,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
   const startEdit = (player: Player) => {
     setEditName(player.name);
     setEditEmail(''); // Don't allow editing email for existing players here yet
+    setEditSeed(player.seed);
     setEditAvatar(player.avatar);
     setIsEditing(player.id);
   };
@@ -53,9 +56,9 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
     setIsSubmitting(true);
     try {
       if (isEditing === 'new') {
-        await onAddPlayer(editName, editAvatar, editEmail);
+        await onAddPlayer(editName, editAvatar, editEmail, editSeed);
       } else if (isEditing) {
-        await onUpdatePlayer(isEditing, editName, editAvatar);
+        await onUpdatePlayer(isEditing, editName, editAvatar, editSeed);
       }
       setIsEditing(null);
     } catch (error) {
@@ -136,6 +139,22 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                   autoFocus
                 />
+              </div>
+
+              {/* Seed Input */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">Seed (Optional)</label>
+                <input
+                  type="number"
+                  value={editSeed || ''}
+                  onChange={(e) => setEditSeed(e.target.value ? parseInt(e.target.value) : undefined)}
+                  placeholder="e.g. 1 (Strongest), 2, 3..."
+                  min="1"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                />
+                <p className="text-xs text-slate-500">
+                  Used for fairness in Strict Mode fixture generation. 1 is strongest.
+                </p>
               </div>
 
               {/* Email Input (New Player Only) */}
