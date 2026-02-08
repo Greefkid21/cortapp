@@ -41,7 +41,7 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         const rounds = n - 1;
         const P = n / 2;
         let configs = 1;
-        let pTemp = P;
+        const pTemp = P;
         if (P % 2 !== 0) {
              // Odd pairs: P!!
              for(let i=pTemp; i>=1; i-=2) configs *= i;
@@ -61,10 +61,10 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         const P = n / 2;
         let configsPerRound = 1;
         if (P % 2 !== 0) {
-            let pT = P;
+            const pT = P;
             for(let i=pT; i>=1; i-=2) configsPerRound *= i;
         } else {
-            let pT = P;
+            const pT = P;
             for(let i=pT-1; i>=1; i-=2) configsPerRound *= i;
         }
         opsPerRestart = Math.pow(configsPerRound, rounds);
