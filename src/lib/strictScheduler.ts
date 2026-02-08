@@ -119,7 +119,7 @@ export function generateStrictSchedule(
 
   // Config
   // Increased costs to prioritize hard constraints (1-3 plays)
-  // Updated for deployment trigger
+  // Updated for deployment trigger (v2)
   const COST_GAP = 1000;
   const COST_VIOLATION = 50000000; // 50M
 
