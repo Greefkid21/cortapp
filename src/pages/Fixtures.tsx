@@ -182,6 +182,7 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1">
                                 <p>Max Opponent Repeat: <span className="font-mono font-bold">{stats.maxOpponentRepeat}</span></p>
+                                <p>Min Opponent Repeat: <span className="font-mono font-bold">{stats.minOpponentRepeat}</span></p>
                                 <p>Total Cost: <span className="font-mono">{stats.cost}</span></p>
                             </div>
                             <div>

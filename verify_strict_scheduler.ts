@@ -72,12 +72,29 @@ function verifySchedule(n: number) {
             console.log(`PASS: All ${expectedPairs} partnerships appear exactly once.`);
         }
 
+        // 4. Verify Fairness Constraints (Min >= 1, Max <= 3)
+        const minOpponentRepeat = result.stats.minOpponentRepeat;
+        const maxOpponentRepeat = result.stats.maxOpponentRepeat;
+
+        if (minOpponentRepeat < 1) {
+             console.error(`FAIL: Found pairs that never play against each other (Min: ${minOpponentRepeat})`);
+        } else {
+             console.log(`PASS: Min Opponent Repeat >= 1 (${minOpponentRepeat})`);
+        }
+
+        if (maxOpponentRepeat > 3) {
+             console.error(`FAIL: Found pairs that play too often (Max: ${maxOpponentRepeat} > 3)`);
+        } else {
+             console.log(`PASS: Max Opponent Repeat <= 3 (${maxOpponentRepeat})`);
+        }
+
     } catch (e: any) {
         console.error("ERROR:", e.message);
     }
 }
 
 // Test cases
+verifySchedule(4);
 verifySchedule(8);
 verifySchedule(12);
 verifySchedule(16);

@@ -2,6 +2,7 @@ import { Player, Match } from '../types';
 
 interface SchedulerStats {
   maxOpponentRepeat: number;
+  minOpponentRepeat: number;
   opponentCountHistogram: Record<number, number>;
   topRepeatedPairs: { p1: string; p2: string; count: number }[];
   cost: number;
@@ -120,8 +121,9 @@ function getPenalty(count: number): number {
   if (count === 2) return 0;   // Ideal
   if (count === 1) return 1;   // Acceptable
   if (count === 3) return 1;   // Acceptable
-  if (count === 0) return 3;   // Avoid
-  return 100;                  // >= 4: Terrible
+  if (count === 0) return 50;  // Avoid (Very High)
+  // >= 4: Forbidden (Extreme). Add gradient so 5 is worse than 4.
+  return 100 + (count - 4) * 50;
 }
 
 function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number): OptimizationResult {
@@ -160,6 +162,7 @@ function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number)
   const getStats = (counts: Int32Array, cost: number): SchedulerStats => {
       const stats: SchedulerStats = {
           maxOpponentRepeat: 0,
+          minOpponentRepeat: Infinity,
           opponentCountHistogram: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
           topRepeatedPairs: [],
           cost: cost
@@ -171,6 +174,7 @@ function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number)
           for (let j = i + 1; j < N; j++) {
               const c = counts[i * N + j];
               if (c > stats.maxOpponentRepeat) stats.maxOpponentRepeat = c;
+              if (c < stats.minOpponentRepeat) stats.minOpponentRepeat = c;
               const histKey = c >= 4 ? 4 : c;
               stats.opponentCountHistogram[histKey] = (stats.opponentCountHistogram[histKey] || 0) + 1;
               pairsList.push({ p1: i, p2: j, count: c });
@@ -198,15 +202,11 @@ function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number)
       
       // 2. Initialize Counts & Cost
       opponentCounts.fill(0);
-      let currentCost = 0; // Relative to 0-base? No, let's use absolute penalty sum.
       
-      // Base penalty for all 0s: N*(N-1)/2 * 3.
-      // But simpler to just sum penalty(count) at end? No, incremental is faster.
-      // Let's track sum of penalties.
-      // Initially all 0. 
+      // Base penalty for all 0s
       // Total pairs = N*(N-1)/2. 
-      // Cost = TotalPairs * 3.
-      currentCost = (N * (N - 1) / 2) * 3;
+      // Cost = TotalPairs * penalty(0).
+      let currentCost = (N * (N - 1) / 2) * getPenalty(0);
 
       // Update function
       const updateMetrics = (t1: Team, t2: Team, delta: number) => {
@@ -342,9 +342,16 @@ function optimizeMatchups(roundsOfTeams: Team[][], N: number, maxTimeMs: number)
   // If no valid schedule found (shouldn't happen), return initial
   if (!bestGlobalStats) {
        // Should not happen as we run at least once
-       return { weeks: [], stats: { cost: Infinity, maxOpponentRepeat: 0, opponentCountHistogram: {}, topRepeatedPairs: [] } };
+       return { weeks: [], stats: { cost: Infinity, maxOpponentRepeat: 0, minOpponentRepeat: 0, opponentCountHistogram: {}, topRepeatedPairs: [] } };
   }
 
   console.log(`Optimization finished. Restarts: ${restarts}. Best Cost: ${bestGlobalCost}`);
+  
+  // 4. Final Validation
+  const { maxOpponentRepeat, minOpponentRepeat } = bestGlobalStats;
+  if (minOpponentRepeat < 1 || maxOpponentRepeat > 3) {
+      throw new Error(`Fairness validation failed: Opponent repeats must be between 1 and 3. Found range [${minOpponentRepeat}, ${maxOpponentRepeat}].`);
+  }
+
   return { weeks: bestGlobalSchedule, stats: bestGlobalStats };
 }
