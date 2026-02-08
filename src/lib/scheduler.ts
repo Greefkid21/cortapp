@@ -16,8 +16,6 @@ import { Player, Match } from '../types';
  */
 export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): Match[] {
   try {
-    // Start optimization process
-    console.log('Starting Optimized Fairness Search (100 restarts)...');
     if (!players || !Array.isArray(players) || players.length < 2) {
         throw new Error("Invalid players array provided");
     }
@@ -29,17 +27,20 @@ export function generateSchedule(players: Player[], startDate: string = new Date
     const playerToIndex = new Map<string, number>();
     realPlayerIds.forEach((id, i) => playerToIndex.set(id, i));
   
-  // Configuration
-  // Adaptive strategy:
-  // N <= 8: Exhaustive Search (Best quality, 3^7 = 2187 checks * 100 restarts)
-  // N > 8: Greedy Search (Good quality, avoids exponential explosion)
-  const USE_GREEDY = n > 8;
-  const RESTARTS = USE_GREEDY ? 200 : 100; // More restarts for greedy to explore better
-  
-  let bestGlobalMatches: Match[] = [];
-  let bestGlobalScore = Infinity;
+    // Configuration
+    // Adaptive strategy:
+    // N <= 8: Exhaustive Search (Best quality, 3^7 = 2187 checks * 100 restarts)
+    // N > 8: Greedy Search (Good quality, avoids exponential explosion)
+    const USE_GREEDY = n > 8;
+    const RESTARTS = USE_GREEDY ? 1000 : 500; // Increased restarts for better coverage
+    
+    // Start optimization process
+    console.log(`Starting Optimized Fairness Search (${RESTARTS} restarts)...`);
+    
+    let bestGlobalMatches: Match[] = [];
+    let bestGlobalScore = Infinity;
 
-  for (let i = 0; i < RESTARTS; i++) {
+    for (let i = 0; i < RESTARTS; i++) {
     // 1. Shuffle Players
     const shuffledIds = [...realPlayerIds];
     for (let k = shuffledIds.length - 1; k > 0; k--) {
@@ -346,21 +347,17 @@ function calculateMetrics(matches: Match[], playerToIndex: Map<string, number>, 
   for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
           const c = counts[i * n + j];
-          if (c > 0) { // Only count pairs that played (should be all for a full round robin?)
-             // Actually, some pairs might not play if N is large.
-             // But for fairness, we want ALL pairs to play.
-             // If c=0, that's a diff of (max - 0).
-          }
-          // Include 0s? The original code did: "values = Array.from(counts.values())"
-          // Which only included non-zero entries (Map only stores keys that were set).
-          // So we should only check c > 0.
           
-          if (c > 0) {
-            if (c < min) min = c;
-            if (c > max) max = c;
-            totalCost += Math.pow(c, 5);
-            hasValues = true;
+          if (c < min) min = c;
+          if (c > max) max = c;
+          
+          if (c === 0) {
+              totalCost += 500000; // Heavy penalty for missing a matchup
+          } else {
+              totalCost += Math.pow(c, 5);
           }
+          
+          hasValues = true;
       }
   }
 
