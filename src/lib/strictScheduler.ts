@@ -124,7 +124,7 @@ export function generateStrictSchedule(
   const COST_VIOLATION = 50000000; // 50M
 
   // Cost Function
-  const getPairCost = (i: number, j: number, count: number): number => {
+  const getPairCost = (_i: number, _j: number, count: number): number => {
       // Hard penalties based on counts - HUGE MAGNITUDE to enforce strict constraints
       if (count === 2) return 0; // Ideal
       if (count === 1 || count === 3) return COST_GAP;
@@ -271,12 +271,10 @@ export function generateStrictSchedule(
     let currentCost = calculateTotalCostFromCounts(currentCounts);
 
     // 4b. Local Search
-    let localImprovement = true;
     let localIter = 0;
     const maxLocalIter = 25000; // Adjusted for more restarts within time limit
 
     while (localIter < maxLocalIter && (Date.now() - startTime) < maxTimeMs) {
-        localImprovement = false;
         localIter++;
 
         // Sync counts periodically to prevent drift (especially for small N where it's cheap)
@@ -397,7 +395,6 @@ export function generateStrictSchedule(
                 match2[slot2] = t1_move;
                 
                 currentCost += delta;
-                localImprovement = true;
             }
         }
     }
