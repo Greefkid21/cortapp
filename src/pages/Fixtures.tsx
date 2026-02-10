@@ -143,7 +143,25 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-slate-900">Fixtures</h2>
+        <div>
+            <h2 className="text-2xl font-bold text-slate-900">Upcoming Fixtures</h2>
+            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" /> Check Match Chat for detailed player availability
+            </p>
+        </div>
+        {isAdmin && (
+        <button
+          onClick={() => {
+              // Reset generation state
+              setGenerated([]);
+              setStats(null);
+              setExplanation('');
+          }}
+          className="bg-primary text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-teal-700 transition-colors"
+        >
+          <Play className="w-5 h-5" /> Generate New
+        </button>
+        )}
       </div>
 
       {/* Generator Section - Admin Only */}
