@@ -109,22 +109,29 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
                 {matchParticipants.map(p => {
                     const avail = getAvailability(p.id, weekStart);
                     return (
-                        <div key={p.id} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100">
-                            <span className="font-medium text-slate-700">{p.name}</span>
-                            {avail ? (
-                                avail.isAvailable ? (
-                                    <span className="text-green-600 flex items-center gap-1">
-                                        <Check className="w-3 h-3" /> {avail.daysAvailable.length > 0 ? avail.daysAvailable.join(', ') : 'Available'}
-                                    </span>
+                        <div key={p.id} className="bg-white p-2 rounded border border-slate-100">
+                            <div className="flex justify-between items-center">
+                                <span className="font-medium text-slate-700">{p.name}</span>
+                                {avail ? (
+                                    avail.isAvailable ? (
+                                        <span className="text-green-600 flex items-center gap-1">
+                                            <Check className="w-3 h-3" /> {avail.daysAvailable.length > 0 ? avail.daysAvailable.join(', ') : 'Available'}
+                                        </span>
+                                    ) : (
+                                        <span className="text-red-500 flex items-center gap-1">
+                                            <X className="w-3 h-3" /> Unavailable
+                                        </span>
+                                    )
                                 ) : (
-                                    <span className="text-red-500 flex items-center gap-1">
-                                        <X className="w-3 h-3" /> Unavailable
+                                    <span className="text-slate-400 flex items-center gap-1">
+                                        <HelpCircle className="w-3 h-3" /> Unknown
                                     </span>
-                                )
-                            ) : (
-                                <span className="text-slate-400 flex items-center gap-1">
-                                    <HelpCircle className="w-3 h-3" /> Unknown
-                                </span>
+                                )}
+                            </div>
+                            {avail?.note && (
+                                <div className="text-[10px] text-slate-500 mt-1 italic pl-2 border-l-2 border-slate-200">
+                                    "{avail.note}"
+                                </div>
                             )}
                         </div>
                     );
