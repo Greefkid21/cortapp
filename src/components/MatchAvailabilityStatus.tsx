@@ -1,4 +1,3 @@
-import React from 'react';
 import { Check, X, HelpCircle } from 'lucide-react';
 import { useAvailability } from '../context/AvailabilityContext';
 import { getWeekStartDate } from '../lib/utils';

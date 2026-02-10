@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Check, X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { useAvailability } from '../context/AvailabilityContext';
 import { cn, formatDate } from '../lib/utils';
