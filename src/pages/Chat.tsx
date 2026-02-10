@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useChat, ChatMessage } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 import { useAvailability } from '../context/AvailabilityContext';
+import { AvailabilityWidget } from '../components/AvailabilityWidget';
 import { getWeekStartDate } from '../lib/utils';
 import { Player, Match } from '../types';
 import { Send, MessageSquare, Edit2, Trash2, X, Check, ArrowLeft, Calendar, HelpCircle } from 'lucide-react';
@@ -99,6 +100,16 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
           {getPlayerName(match.team1[0])}/{getPlayerName(match.team1[1])} vs{' '}
           {getPlayerName(match.team2[0])}/{getPlayerName(match.team2[1])}
         </div>
+
+        {user?.playerId && (
+            <div className="mb-6">
+                <AvailabilityWidget 
+                    playerId={user.playerId} 
+                    weekStartDate={weekStart} 
+                    title="Update Your Availability" 
+                />
+            </div>
+        )}
 
         {/* Availability Summary */}
         <div className="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">

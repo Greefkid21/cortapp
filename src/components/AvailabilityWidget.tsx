@@ -6,11 +6,12 @@ import { cn, formatDate } from '../lib/utils';
 interface AvailabilityWidgetProps {
   playerId: string;
   weekStartDate: string; // YYYY-MM-DD
+  title?: string;
 }
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
-export function AvailabilityWidget({ playerId, weekStartDate }: AvailabilityWidgetProps) {
+export function AvailabilityWidget({ playerId, weekStartDate, title }: AvailabilityWidgetProps) {
   const { getAvailability, updateAvailability } = useAvailability();
   const [status, setStatus] = useState<'yes' | 'no' | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
@@ -70,7 +71,7 @@ export function AvailabilityWidget({ playerId, weekStartDate }: AvailabilityWidg
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
         <div>
-            <h3 className="font-bold text-slate-800">Availability for Next Week</h3>
+            <h3 className="font-bold text-slate-800">{title || 'Availability for Next Week'}</h3>
             <p className="text-xs text-slate-500">
                 {formatDate(weekStartDate)} - {formatDate(endDateObj.toISOString())} • 8:00–9:00am
             </p>
