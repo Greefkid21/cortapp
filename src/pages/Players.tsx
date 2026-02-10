@@ -1,7 +1,9 @@
 import { useState, useRef } from 'react';
 import { Player } from '../types';
-import { User, Edit2, Plus, Upload, X, Save, Trash2 } from 'lucide-react';
+import { User, Edit2, Plus, Upload, X, Save, Trash2, Check, HelpCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useAvailability } from '../context/AvailabilityContext';
+import { getNextWeekStartDate } from '../lib/utils';
 import { Link } from 'react-router-dom';
 
 interface PlayersPageProps {
@@ -13,6 +15,8 @@ interface PlayersPageProps {
 
 export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlayer }: PlayersPageProps) {
   const { isAdmin } = useAuth();
+  const { getAvailability } = useAvailability();
+  const nextWeekStart = getNextWeekStartDate();
   const [isEditing, setIsEditing] = useState<string | null>(null); // 'new' or player ID
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -210,7 +214,21 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors">{player.name}</h3>
-                <p className="text-xs text-slate-500">{player.stats.matchesPlayed} matches played</p>
+                <p className="text-xs text-slate-500 mb-1">{player.stats.matchesPlayed} matches played</p>
+                {/* Availability Info */}
+                <div className="flex items-center gap-2 text-xs">
+                  {(() => {
+                    const avail = getAvailability(player.id, nextWeekStart);
+                    if (!avail) return <span className="text-slate-400 flex items-center gap-1"><HelpCircle className="w-3 h-3" /> No info</span>;
+                    if (!avail.isAvailable) return <span className="text-red-500 flex items-center gap-1"><X className="w-3 h-3" /> Unavailable</span>;
+                    return (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> 
+                        {avail.daysAvailable.length > 0 ? avail.daysAvailable.join(', ') : 'Available'}
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             </Link>
             {isAdmin && (
