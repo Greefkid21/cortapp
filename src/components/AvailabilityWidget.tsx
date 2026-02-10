@@ -53,7 +53,10 @@ export function AvailabilityWidget({ playerId, weekStartDate }: AvailabilityWidg
   const save = async (s: 'yes' | 'no' | null, d: string[], n: string) => {
     if (!s) return;
     setIsSaving(true);
-    await updateAvailability(playerId, weekStartDate, s === 'yes', d, n);
+    const success = await updateAvailability(playerId, weekStartDate, s === 'yes', d, n);
+    if (!success) {
+        alert('Failed to save availability. Please try again.');
+    }
     setIsSaving(false);
   };
 

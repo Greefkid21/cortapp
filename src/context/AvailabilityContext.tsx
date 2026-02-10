@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 
 interface AvailabilityContextType {
   availability: PlayerAvailability[];
-  updateAvailability: (playerId: string, weekStartDate: string, isAvailable: boolean, daysAvailable: string[], note?: string) => Promise<void>;
+  updateAvailability: (playerId: string, weekStartDate: string, isAvailable: boolean, daysAvailable: string[], note?: string) => Promise<boolean>;
   getAvailability: (playerId: string, weekStartDate: string) => PlayerAvailability | undefined;
   loading: boolean;
 }
@@ -90,8 +90,11 @@ export function AvailabilityProvider({ children }: { children: React.ReactNode }
         if (error) {
             console.error('Error updating availability:', error);
             // TODO: Revert optimistic update?
+            return false;
         }
+        return true;
     }
+    return true; // Mock mode success
   };
 
   const getAvailability = (playerId: string, weekStartDate: string) => {
