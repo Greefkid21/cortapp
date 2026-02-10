@@ -6,12 +6,6 @@ import { Match } from '../types';
 export function MatchAvailabilityStatus({ match }: { match: Match }) {
     const { getAvailability } = useAvailability();
     const weekStart = getWeekStartDate(new Date(match.date));
-    
-    // Fix: Ensure day extraction is robust regardless of timezone
-    // match.date is typically YYYY-MM-DD string.
-    // We construct a date at noon to avoid timezone midnight shifts
-    const matchDate = new Date(match.date + 'T12:00:00');
-    const dayName = matchDate.toLocaleDateString('en-US', { weekday: 'short' });
 
     const getStatus = (pid: string) => {
         const avail = getAvailability(pid, weekStart);
