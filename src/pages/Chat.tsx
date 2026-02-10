@@ -2,14 +2,17 @@ import { useMemo, useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useChat, ChatMessage } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
+import { useAvailability } from '../context/AvailabilityContext';
+import { getWeekStartDate } from '../lib/utils';
 import { Player, Match } from '../types';
-import { Send, MessageSquare, Edit2, Trash2, X, Check, ArrowLeft } from 'lucide-react';
+import { Send, MessageSquare, Edit2, Trash2, X, Check, ArrowLeft, Calendar, HelpCircle } from 'lucide-react';
 
 export function Chat({ matches, players }: { matches: Match[]; players: Player[] }) {
   const [params] = useSearchParams();
   const matchId = params.get('matchId') || '';
   const { getThread, sendMessage, editMessage, deleteMessage, markAsRead, messages } = useChat();
   const { user, isAdmin } = useAuth();
+  const { getAvailability } = useAvailability();
   const [text, setText] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -29,6 +32,13 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
   // Ensure robust player name lookup
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
+
+  const matchParticipants = useMemo(() => {
+    if (!match) return [];
+    return [...match.team1, ...match.team2].map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+  }, [match, players]);
+
+  const weekStart = useMemo(() => match ? getWeekStartDate(new Date(match.date)) : '', [match]);
 
   const handleSend = async () => {
     if (!user || !text.trim() || !canPost) return;
@@ -89,6 +99,39 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
           {getPlayerName(match.team1[0])}/{getPlayerName(match.team1[1])} vs{' '}
           {getPlayerName(match.team2[0])}/{getPlayerName(match.team2[1])}
         </div>
+
+        {/* Availability Summary */}
+        <div className="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+            <h3 className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Player Availability for Match Week
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {matchParticipants.map(p => {
+                    const avail = getAvailability(p.id, weekStart);
+                    return (
+                        <div key={p.id} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100">
+                            <span className="font-medium text-slate-700">{p.name}</span>
+                            {avail ? (
+                                avail.isAvailable ? (
+                                    <span className="text-green-600 flex items-center gap-1">
+                                        <Check className="w-3 h-3" /> {avail.daysAvailable.length > 0 ? avail.daysAvailable.join(', ') : 'Available'}
+                                    </span>
+                                ) : (
+                                    <span className="text-red-500 flex items-center gap-1">
+                                        <X className="w-3 h-3" /> Unavailable
+                                    </span>
+                                )
+                            ) : (
+                                <span className="text-slate-400 flex items-center gap-1">
+                                    <HelpCircle className="w-3 h-3" /> Unknown
+                                </span>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+
         <div className="h-[40vh] overflow-y-auto space-y-2 border border-slate-100 rounded-lg p-3 bg-slate-50">
           {thread.length === 0 ? (
             <div className="text-center text-slate-400">No messages yet</div>
