@@ -343,45 +343,6 @@ function MainApp() {
     setMatches(prev => prev.map(m => m.id === updatedMatch.id ? { ...updatedMatch, winner: newStats.winner as any, status: 'completed' } : m));
   };
 
-  const handleAddMatches = async (newMatches: Match[]) => {
-    if (supabase) {
-      const inserts = newMatches.map(m => ({
-        season_id: currentSeasonId,
-        date: m.date,
-        team1_player1_id: m.team1[0],
-        team1_player2_id: m.team1[1],
-        team2_player1_id: m.team2[0],
-        team2_player2_id: m.team2[1],
-        status: m.status,
-        winner: null, // Scheduled
-        // ... scores are null for scheduled
-      }));
-
-      const { data, error } = await supabase.from('matches').insert(inserts).select();
-      
-      if (error) {
-        console.error('Error adding matches:', error);
-        return;
-      }
-      
-      if (data) {
-        const mapped: Match[] = data.map(m => ({
-          id: m.id,
-          date: new Date(m.date).toISOString().split('T')[0],
-          team1: [m.team1_player1_id, m.team1_player2_id].filter(Boolean) as string[],
-          team2: [m.team2_player1_id, m.team2_player2_id].filter(Boolean) as string[],
-          sets: [], // Scheduled matches have no sets yet
-          winner: null,
-          status: m.status as any,
-          postponed: m.status === 'postponed'
-        }));
-        setMatches(prev => [...prev, ...mapped]);
-      }
-    } else {
-        setMatches(prev => [...prev, ...newMatches]);
-    }
-  };
-
   const handleUpdateMatch = async (updated: Match) => {
     if (supabase) {
         const { error } = await supabase.from('matches').update({
@@ -549,7 +510,7 @@ function MainApp() {
 
         {/* Protected Routes */}
         <Route index element={<RequireAuth><Home players={players} /></RequireAuth>} />
-        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onAddMatches={handleAddMatches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
+        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
         <Route path="chat" element={<RequireAuth><Chat matches={matches} players={players} /></RequireAuth>} />
