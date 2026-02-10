@@ -41,6 +41,11 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
 
   const weekStart = useMemo(() => match ? getWeekStartDate(new Date(match.date)) : '', [match]);
 
+  const isParticipant = useMemo(() => {
+    if (!match || !user?.playerId) return false;
+    return [...match.team1, ...match.team2].includes(user.playerId);
+  }, [match, user]);
+
   const handleSend = async () => {
     if (!user || !text.trim() || !canPost) return;
     try {
@@ -101,7 +106,7 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
           {getPlayerName(match.team2[0])}/{getPlayerName(match.team2[1])}
         </div>
 
-        {user?.playerId && (
+        {isParticipant && user?.playerId && (
             <div className="mb-6">
                 <AvailabilityWidget 
                     playerId={user.playerId} 
