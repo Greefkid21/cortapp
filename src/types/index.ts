@@ -65,3 +65,13 @@ export interface SeasonArchive {
   players: Player[];
   matches: Match[];
 }
+
+export interface PlayerAvailability {
+  id?: string;
+  playerId: string;
+  weekStartDate: string; // YYYY-MM-DD (Monday)
+  isAvailable: boolean;
+  daysAvailable: string[]; // ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+  note?: string;
+  updatedAt?: string;
+}

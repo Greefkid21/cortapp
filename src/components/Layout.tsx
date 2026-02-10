@@ -36,7 +36,6 @@ export function Layout() {
         { path: '/settings', label: 'Settings', icon: Settings },
     ] : []),
     ...(isAdmin ? [
-        // { path: '/add-match', label: 'Entry', icon: PlusCircle }, // Hidden as per request
         { path: '/users', label: 'Admin', icon: Shield },
         { path: '/players', label: 'Players', icon: Users },
         { path: '/history', label: 'History', icon: History },

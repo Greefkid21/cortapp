@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
-// import { AddMatch } from './pages/AddMatch';
 import { Fixtures } from './pages/Fixtures';
 import { PlayersPage } from './pages/Players';
 import { HistoryPage } from './pages/History';
@@ -11,6 +10,7 @@ import { UsersPage } from './pages/UsersPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
 import { SeasonProvider, useSeason } from './context/SeasonContext';
+import { AvailabilityProvider } from './context/AvailabilityContext';
 import { Seasons } from './pages/Seasons';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { Settings } from './pages/Settings';
@@ -131,11 +131,6 @@ function MainApp() {
     fetchData();
   }, [currentSeasonId]);
 
-  /*
-  const handleAddMatch = async (data: any) => {
-    // ... (Code removed as per user request to remove entry tab)
-  }; 
-  */
 
   const handleEditMatchResult = async (updatedMatch: Match) => {
     // 1. Find original match to revert stats
@@ -387,36 +382,6 @@ function MainApp() {
     }
   };
 
-  const handleUpdateAvailability = async (matchId: string, playerId: string, status: 'available' | 'unavailable') => {
-    // Optimistic update
-    setMatches(prev => prev.map(m => {
-        if (m.id !== matchId) return m;
-        const newAvailability = { ...m.availability, [playerId]: status };
-        return { ...m, availability: newAvailability };
-    }));
-
-    if (supabase) {
-        // Get current match availability first to ensure we don't overwrite others (though optimistic update assumes we have latest)
-        // Ideally we use a jsonb_set or similar, but fetching current is safer for race conditions if we can't do atomic updates easily.
-        // For now, we'll just update with what we have in state (or what we just calculated).
-        
-        const match = matches.find(m => m.id === matchId);
-        const currentAvailability = match?.availability || {};
-        const updatedAvailability = { ...currentAvailability, [playerId]: status };
-
-        const { error } = await supabase
-            .from('matches')
-            .update({ availability: updatedAvailability })
-            .eq('id', matchId);
-
-        if (error) {
-            console.error('Error updating availability:', error);
-            // Revert on error? For now, just alert.
-            alert('Failed to update availability');
-        }
-    }
-  };
-
   const handleUpdateMatch = async (updated: Match) => {
     if (supabase) {
         const { error } = await supabase.from('matches').update({
@@ -584,7 +549,7 @@ function MainApp() {
 
         {/* Protected Routes */}
         <Route index element={<RequireAuth><Home players={players} /></RequireAuth>} />
-        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onAddMatches={handleAddMatches} onUpdateMatch={handleUpdateMatch} onUpdateAvailability={handleUpdateAvailability} /></RequireAuth>} />
+        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onAddMatches={handleAddMatches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
         <Route path="chat" element={<RequireAuth><Chat matches={matches} players={players} /></RequireAuth>} />
@@ -605,9 +570,11 @@ function App() {
       <SettingsProvider>
         <SeasonProvider>
           <ChatProvider>
-            <BrowserRouter>
-               <MainApp />
-            </BrowserRouter>
+            <AvailabilityProvider>
+              <BrowserRouter>
+                 <MainApp />
+              </BrowserRouter>
+            </AvailabilityProvider>
           </ChatProvider>
         </SeasonProvider>
       </SettingsProvider>

@@ -1,22 +1,24 @@
 import { useState } from 'react';
 import { Player, Match } from '../types';
-import { Calendar, Play, Shuffle, MessageSquare, Check, X } from 'lucide-react';
+import { Calendar, Play, Shuffle, MessageSquare, Check, X, HelpCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
-import { cn } from '../lib/utils';
+import { useAvailability } from '../context/AvailabilityContext';
+import { getWeekStartDate } from '../lib/utils';
+import { MatchAvailabilityStatus } from '../components/MatchAvailabilityStatus';
 
 interface FixturesProps {
   players: Player[];
   matches: Match[];
   onAddMatches: (newMatches: Match[]) => void;
   onUpdateMatch?: (updated: Match) => void;
-  onUpdateAvailability?: (matchId: string, playerId: string, status: 'available' | 'unavailable') => void;
 }
 
-export function Fixtures({ players, matches, onAddMatches, onUpdateMatch, onUpdateAvailability }: FixturesProps) {
+export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: FixturesProps) {
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin } = useAuth();
+  const { getAvailability } = useAvailability();
   const { getUnreadCount } = useChat();
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(players.map(p => p.id));
   const [generated, setGenerated] = useState<Match[]>([]);
@@ -305,9 +307,16 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch, onUpda
                             W/C {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
                         </h4>
                         {matches.map(match => {
-                            const myPlayerId = user?.playerId;
-                            const isMyMatch = myPlayerId && (match.team1.includes(myPlayerId) || match.team2.includes(myPlayerId));
-                            const myStatus = myPlayerId ? match.availability?.[myPlayerId] : undefined;
+                            const weekStart = getWeekStartDate(new Date(match.date));
+                            const dayName = new Date(match.date).toLocaleDateString('en-US', { weekday: 'short' });
+                            
+                            const getPlayerStatus = (pid: string) => {
+                                const avail = getAvailability(pid, weekStart);
+                                if (!avail) return 'unknown';
+                                if (!avail.isAvailable) return 'no';
+                                if (avail.daysAvailable.includes(dayName)) return 'yes';
+                                return 'no';
+                            };
 
                             return (
                             <div key={match.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col gap-3">
@@ -319,24 +328,9 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch, onUpda
                                         'bg-slate-50 text-slate-500'
                                         }`}>{match.status === 'postponed' ? 'Postponed' : 'Scheduled'}</span>
 
-                                        {isMyMatch && onUpdateAvailability && match.status !== 'completed' && (
-                                            <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-0.5 border border-slate-100 ml-2">
-                                                <button 
-                                                    onClick={() => onUpdateAvailability(match.id, myPlayerId!, 'available')}
-                                                    className={cn("p-1 rounded transition-colors", myStatus === 'available' ? 'bg-green-100 text-green-700' : 'text-slate-400 hover:text-green-600 hover:bg-green-50')}
-                                                    title="I can play"
-                                                >
-                                                    <Check className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button 
-                                                    onClick={() => onUpdateAvailability(match.id, myPlayerId!, 'unavailable')}
-                                                    className={cn("p-1 rounded transition-colors", myStatus === 'unavailable' ? 'bg-red-100 text-red-700' : 'text-slate-400 hover:text-red-600 hover:bg-red-50')}
-                                                    title="I cannot play"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        )}
+                                        <div className="ml-2 pl-2 border-l border-slate-200">
+                                            <MatchAvailabilityStatus match={match} />
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-3">
@@ -373,15 +367,16 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch, onUpda
                                 <div className="flex justify-between items-center">
                                     <div className="flex-1 flex flex-col gap-1">
                                         {[match.team1[0], match.team1[1]].map(pid => {
-                                            const status = match.availability?.[pid];
+                                            const status = getPlayerStatus(pid);
                                             return (
                                                 <div key={pid} className="flex items-center gap-1.5">
                                                     <Link to={`/player/${pid}`} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
-                                                    {status && (
-                                                        <div title={status === 'available' ? 'Available' : 'Unavailable'} className={status === 'available' ? 'text-green-500' : 'text-red-500'}>
-                                                            {status === 'available' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                    {status !== 'unknown' && (
+                                                        <div title={status === 'yes' ? 'Available' : 'Unavailable'} className={status === 'yes' ? 'text-green-500' : 'text-red-500'}>
+                                                            {status === 'yes' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                                                         </div>
                                                     )}
+                                                    {status === 'unknown' && <HelpCircle className="w-3 h-3 text-slate-300" />}
                                                 </div>
                                             );
                                         })}
@@ -391,15 +386,16 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch, onUpda
 
                                     <div className="flex-1 flex flex-col gap-1 items-end">
                                         {[match.team2[0], match.team2[1]].map(pid => {
-                                            const status = match.availability?.[pid];
+                                            const status = getPlayerStatus(pid);
                                             return (
                                                 <div key={pid} className="flex items-center gap-1.5 flex-row-reverse">
                                                     <Link to={`/player/${pid}`} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
-                                                    {status && (
-                                                        <div title={status === 'available' ? 'Available' : 'Unavailable'} className={status === 'available' ? 'text-green-500' : 'text-red-500'}>
-                                                            {status === 'available' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                    {status !== 'unknown' && (
+                                                        <div title={status === 'yes' ? 'Available' : 'Unavailable'} className={status === 'yes' ? 'text-green-500' : 'text-red-500'}>
+                                                            {status === 'yes' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                                                         </div>
                                                     )}
+                                                    {status === 'unknown' && <HelpCircle className="w-3 h-3 text-slate-300" />}
                                                 </div>
                                             );
                                         })}
