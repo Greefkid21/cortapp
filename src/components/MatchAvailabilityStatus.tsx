@@ -5,6 +5,7 @@ import { Match } from '../types';
 
 export function MatchAvailabilityStatus({ match }: { match: Match }) {
     const { getAvailability } = useAvailability();
+    // Trigger Vercel rebuild
     const weekStart = getWeekStartDate(new Date(match.date));
 
     const getStatus = (pid: string) => {
