@@ -11,7 +11,7 @@ export function MatchAvailabilityStatus({ match }: { match: Match }) {
         const avail = getAvailability(pid, weekStart);
         if (!avail) return 'unknown';
         // Relaxed Logic: If user marked "Available" (Yes) for the week, show as ready (Tick),
-        // regardless of whether the specific match day is selected.
+    // regardless of whether the specific match day is selected.
         // Only show 'no' (X) if they explicitly said "No" for the week.
         if (!avail.isAvailable) return 'no';
         return 'yes';
