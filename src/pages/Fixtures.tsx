@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { Player, Match } from '../types';
-import { Calendar, Play, Shuffle, MessageSquare } from 'lucide-react';
+import { Calendar, Play, Shuffle, MessageSquare, Check, X } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
+import { cn } from '../lib/utils';
 
 interface FixturesProps {
   players: Player[];
   matches: Match[];
   onAddMatches: (newMatches: Match[]) => void;
   onUpdateMatch?: (updated: Match) => void;
+  onUpdateAvailability?: (matchId: string, playerId: string, status: 'available' | 'unavailable') => void;
 }
 
-export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: FixturesProps) {
+export function Fixtures({ players, matches, onAddMatches, onUpdateMatch, onUpdateAvailability }: FixturesProps) {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const { getUnreadCount } = useChat();
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(players.map(p => p.id));
   const [generated, setGenerated] = useState<Match[]>([]);
@@ -302,14 +304,41 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                             <span className="w-2 h-2 rounded-full bg-primary/40"></span>
                             W/C {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
                         </h4>
-                        {matches.map(match => (
+                        {matches.map(match => {
+                            const myPlayerId = user?.playerId;
+                            const isMyMatch = myPlayerId && (match.team1.includes(myPlayerId) || match.team2.includes(myPlayerId));
+                            const myStatus = myPlayerId ? match.availability?.[myPlayerId] : undefined;
+
+                            return (
                             <div key={match.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col gap-3">
                                 <div className="flex justify-between items-center text-xs text-slate-400">
-                                    <span className={`px-2 py-0.5 rounded-full font-medium ${
-                                    match.status === 'scheduled' ? 'bg-blue-50 text-blue-600' :
-                                    match.status === 'postponed' ? 'bg-amber-50 text-amber-700' :
-                                    'bg-slate-50 text-slate-500'
-                                    }`}>{match.status === 'postponed' ? 'Postponed' : 'Scheduled'}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 rounded-full font-medium ${
+                                        match.status === 'scheduled' ? 'bg-blue-50 text-blue-600' :
+                                        match.status === 'postponed' ? 'bg-amber-50 text-amber-700' :
+                                        'bg-slate-50 text-slate-500'
+                                        }`}>{match.status === 'postponed' ? 'Postponed' : 'Scheduled'}</span>
+
+                                        {isMyMatch && onUpdateAvailability && match.status !== 'completed' && (
+                                            <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-0.5 border border-slate-100 ml-2">
+                                                <button 
+                                                    onClick={() => onUpdateAvailability(match.id, myPlayerId!, 'available')}
+                                                    className={cn("p-1 rounded transition-colors", myStatus === 'available' ? 'bg-green-100 text-green-700' : 'text-slate-400 hover:text-green-600 hover:bg-green-50')}
+                                                    title="I can play"
+                                                >
+                                                    <Check className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => onUpdateAvailability(match.id, myPlayerId!, 'unavailable')}
+                                                    className={cn("p-1 rounded transition-colors", myStatus === 'unavailable' ? 'bg-red-100 text-red-700' : 'text-slate-400 hover:text-red-600 hover:bg-red-50')}
+                                                    title="I cannot play"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div className="flex items-center gap-3">
                                     {(isAdmin) && (
                                         <button 
@@ -343,19 +372,42 @@ export function Fixtures({ players, matches, onAddMatches, onUpdateMatch }: Fixt
                                 
                                 <div className="flex justify-between items-center">
                                     <div className="flex-1 flex flex-col gap-1">
-                                        <Link to={`/player/${match.team1[0]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team1[0])}</Link>
-                                        <Link to={`/player/${match.team1[1]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team1[1])}</Link>
+                                        {[match.team1[0], match.team1[1]].map(pid => {
+                                            const status = match.availability?.[pid];
+                                            return (
+                                                <div key={pid} className="flex items-center gap-1.5">
+                                                    <Link to={`/player/${pid}`} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
+                                                    {status && (
+                                                        <div title={status === 'available' ? 'Available' : 'Unavailable'} className={status === 'available' ? 'text-green-500' : 'text-red-500'}>
+                                                            {status === 'available' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
 
                                     <div className="text-xs font-bold text-slate-300 px-4">VS</div>
 
-                                    <div className="flex-1 flex flex-col gap-1 text-right">
-                                        <Link to={`/player/${match.team2[0]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team2[0])}</Link>
-                                        <Link to={`/player/${match.team2[1]}`} className="text-sm font-medium hover:underline">{getPlayerName(match.team2[1])}</Link>
+                                    <div className="flex-1 flex flex-col gap-1 items-end">
+                                        {[match.team2[0], match.team2[1]].map(pid => {
+                                            const status = match.availability?.[pid];
+                                            return (
+                                                <div key={pid} className="flex items-center gap-1.5 flex-row-reverse">
+                                                    <Link to={`/player/${pid}`} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
+                                                    {status && (
+                                                        <div title={status === 'available' ? 'Available' : 'Unavailable'} className={status === 'available' ? 'text-green-500' : 'text-red-500'}>
+                                                            {status === 'available' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 ))}
             </div>

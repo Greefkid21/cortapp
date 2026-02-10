@@ -38,6 +38,7 @@ export interface Match {
 
   winner: 'team1' | 'team2' | 'draw' | null;
   status: 'scheduled' | 'postponed' | 'completed';
+  availability?: Record<string, 'available' | 'unavailable'>; // playerId -> status
 }
 
 export interface AppUser {
