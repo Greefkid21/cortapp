@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useMemo, useState } from 'react';
-import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X } from 'lucide-react';
+import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -33,6 +33,7 @@ export function Layout() {
     ...(user ? [
         { path: '/', label: 'League', icon: Trophy },
         { path: '/fixtures', label: 'Fixtures', icon: Calendar },
+        { path: '/rules', label: 'Rules', icon: FileText },
         { path: '/settings', label: 'Settings', icon: Settings },
     ] : []),
     ...(isAdmin ? [

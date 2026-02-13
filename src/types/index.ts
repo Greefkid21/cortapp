@@ -75,3 +75,11 @@ export interface PlayerAvailability {
   note?: string;
   updatedAt?: string;
 }
+
+export interface Rule {
+  id: string;
+  content: string;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}

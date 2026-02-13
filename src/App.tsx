@@ -17,6 +17,7 @@ import { Settings } from './pages/Settings';
 import { Chat } from './pages/Chat';
 import { AddMatch } from './pages/AddMatch';
 import { PlayerProfile } from './pages/PlayerProfile';
+import { Rules } from './pages/Rules';
 import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
@@ -513,6 +514,7 @@ function MainApp() {
         <Route index element={<RequireAuth><Home players={players} /></RequireAuth>} />
         <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
+        <Route path="rules" element={<RequireAuth><Rules /></RequireAuth>} />
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
         <Route path="chat" element={<RequireAuth><Chat matches={matches} players={players} /></RequireAuth>} />
         <Route path="add-match" element={<RequireAuth><AddMatch matches={matches} players={players} onAddResult={handleEditMatchResult} /></RequireAuth>} />
