@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Player, Match } from '../types';
-import { Calendar, Play, MessageSquare, Check, X, HelpCircle } from 'lucide-react';
+import { Calendar, Play, MessageSquare, Check, X, HelpCircle, Edit2 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
@@ -104,43 +104,49 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
 
                             return (
                             <div key={match.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col gap-3">
-                                <div className="flex justify-between items-center text-xs text-slate-400">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`px-2 py-0.5 rounded-full font-medium ${
+                                <div className="flex flex-wrap justify-between items-center gap-y-2 text-xs text-slate-400">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <span className={`px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
                                         match.status === 'scheduled' ? 'bg-blue-50 text-blue-600' :
                                         match.status === 'postponed' ? 'bg-amber-50 text-amber-700' :
                                         'bg-slate-50 text-slate-500'
                                         }`}>{match.status === 'postponed' ? 'Postponed' : 'Scheduled'}</span>
 
-                                        <div className="ml-2 pl-2 border-l border-slate-200">
+                                        <div className="ml-1 pl-2 border-l border-slate-200 truncate">
                                             <MatchAvailabilityStatus match={match} />
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 ml-auto">
                                     {(isAdmin) && (
                                         <button 
                                             onClick={() => navigate(`/add-match?matchId=${match.id}`)}
-                                            className="flex items-center gap-1 text-primary font-bold hover:text-teal-700"
+                                            className="flex items-center gap-1 text-primary font-bold hover:text-teal-700 p-1"
+                                            title="Record Result"
                                         >
-                                            <Play className="w-3 h-3 fill-current" /> Play
+                                            <Play className="w-3 h-3 fill-current" />
+                                            <span className="hidden sm:inline">Play</span>
                                         </button>
                                     )}
                                     {isAdmin && (
                                         <button
                                         onClick={() => startReschedule(match)}
-                                        className="flex items-center gap-1 text-amber-700 font-bold hover:text-amber-800"
+                                        className="flex items-center gap-1 text-amber-700 font-bold hover:text-amber-800 p-1"
+                                        title="Edit Match"
                                         >
-                                        Edit
+                                        <Edit2 className="w-3 h-3" />
+                                        <span className="hidden sm:inline">Edit</span>
                                         </button>
                                     )}
                                     <button 
                                         onClick={() => navigate(`/chat?matchId=${match.id}`)}
-                                        className="flex items-center gap-1 text-slate-600 font-bold hover:text-slate-900 relative"
+                                        className="flex items-center gap-1 text-slate-600 font-bold hover:text-slate-900 relative p-1"
+                                        title="Match Chat"
                                     >
-                                        <MessageSquare className="w-3 h-3" /> Chat
+                                        <MessageSquare className="w-3 h-3" />
+                                        <span className="hidden sm:inline">Chat</span>
                                         {getUnreadCount(match.id) > 0 && (
-                                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center border-2 border-white">
+                                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center border-2 border-white">
                                                 {getUnreadCount(match.id)}
                                             </span>
                                         )}
