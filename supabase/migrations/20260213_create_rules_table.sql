@@ -70,3 +70,4 @@ INSERT INTO rules (content, display_order) VALUES
 ('If after the hour there has only been 1 full set played, the team who won the first set will get 1 point only. The games from the 2nd set will count towards the league table', 10),
 ('Please update the relevant colour WhatsApp group the score so the league can be updated. Scores will be recorded on the website each week.', 11),
 ('At the end of the league, the winner with the most points will win a prize equal to £60. The runner up will win a prize equal to £40.', 12);
+

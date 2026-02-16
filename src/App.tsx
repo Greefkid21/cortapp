@@ -258,6 +258,15 @@ function MainApp() {
         let diffPoints = 0;
         let diffSetsWon = 0, diffSetsLost = 0;
         let diffGamesWon = 0, diffGamesLost = 0;
+        let diffPlayed = 0;
+
+        if (originalMatch.status === 'completed' && (inOldTeam1 || inOldTeam2)) {
+             diffPlayed -= 1;
+        }
+
+        if (inNewTeam1 || inNewTeam2) {
+             diffPlayed += 1;
+        }
 
         // Revert Old Stats
         if (inOldTeam1 || inOldTeam2) {
@@ -311,6 +320,7 @@ function MainApp() {
 
         const updatedStats = {
             ...p.stats,
+            matchesPlayed: (p.stats.matchesPlayed || 0) + diffPlayed,
             wins: (p.stats.wins || 0) + diffWins,
             losses: (p.stats.losses || 0) + diffLosses,
             draws: (p.stats.draws || 0) + diffDraws,
@@ -325,6 +335,7 @@ function MainApp() {
         // Update DB player
         if (supabase) {
              supabase.from('players').update({
+                played: updatedStats.matchesPlayed,
                 wins: updatedStats.wins,
                 losses: updatedStats.losses,
                 draws: updatedStats.draws,

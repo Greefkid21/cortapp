@@ -16,6 +16,17 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
 
+  const leagueRank = useMemo(() => {
+    if (!player) return 0;
+    const sorted = [...players].sort((a, b) => {
+      if (b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
+      return (b.stats.gameDifference || 0) - (a.stats.gameDifference || 0);
+    });
+    const index = sorted.findIndex(p => p.id === player.id);
+    if (index === -1) return players.indexOf(player) + 1;
+    return index + 1;
+  }, [players, player]);
+
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0 || !player) return;
     
@@ -144,7 +155,7 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
           <h1 className="text-3xl font-black text-slate-900">{player.name}</h1>
           <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
             <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-sm font-medium">
-              Rank #{players.indexOf(player) + 1}
+              Rank #{leagueRank}
             </span>
             <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
               {player.stats.points} Points
