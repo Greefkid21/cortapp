@@ -61,13 +61,16 @@ function MainApp() {
       setLoadingData(true);
       if (supabase) {
         try {
+          let mappedPlayers: Player[] = [];
+          let mappedMatches: Match[] = [];
+
           // Fetch Players
           const { data: playersData } = await supabase
             .from('players')
             .select('*');
           
           if (playersData) {
-            const mappedPlayers: Player[] = playersData.map(p => ({
+            mappedPlayers = playersData.map(p => ({
               id: p.id,
               name: p.name,
               avatar: p.avatar,
@@ -98,7 +101,7 @@ function MainApp() {
           const { data: matchesData } = await query.order('date', { ascending: false });
           
           if (matchesData) {
-            const mappedMatches: Match[] = matchesData.map(m => ({
+            mappedMatches = matchesData.map(m => ({
               id: m.id,
               date: new Date(m.date).toISOString().split('T')[0],
               team1: [m.team1_player1_id, m.team1_player2_id].filter(Boolean) as string[],
@@ -116,8 +119,34 @@ function MainApp() {
               postponed: m.status === 'postponed',
               availability: m.availability || {}
             }));
-            setMatches(mappedMatches);
           }
+
+          // Derive matches played from completed matches to ensure accuracy
+          if (mappedPlayers.length > 0) {
+            const playedCounts: Record<string, number> = {};
+
+            mappedMatches.forEach(match => {
+              if (match.status === 'completed') {
+                [...match.team1, ...match.team2].forEach(pid => {
+                  playedCounts[pid] = (playedCounts[pid] || 0) + 1;
+                });
+              }
+            });
+
+            const playersWithPlayed = mappedPlayers.map(p => ({
+              ...p,
+              stats: {
+                ...p.stats,
+                matchesPlayed: playedCounts[p.id] || 0
+              }
+            }));
+
+            setPlayers(playersWithPlayed);
+          } else if (mappedPlayers.length === 0 && playersData) {
+            setPlayers(mappedPlayers);
+          }
+
+          setMatches(mappedMatches);
 
         } catch (error) {
           console.error('Error fetching data:', error);
