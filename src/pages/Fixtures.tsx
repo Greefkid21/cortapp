@@ -79,14 +79,17 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
             </div>
         ) : (
             <div className="space-y-8">
-                {Object.entries(scheduledMatches.reduce((acc, m) => {
-                    (acc[m.date] = acc[m.date] || []).push(m);
+                {Object.entries(
+                  scheduledMatches.reduce((acc, m) => {
+                    const weekKey = getWeekStartDate(new Date(m.date));
+                    (acc[weekKey] = acc[weekKey] || []).push(m);
                     return acc;
-                }, {} as Record<string, typeof scheduledMatches>)).map(([date, matches]) => (
-                    <div key={date} className="space-y-3">
+                  }, {} as Record<string, typeof scheduledMatches>)
+                ).map(([weekStart, matches]) => (
+                    <div key={weekStart} className="space-y-3">
                         <h4 className="font-bold text-sm text-slate-500 flex items-center gap-2 sticky top-0 bg-slate-50/95 p-2 rounded-lg backdrop-blur-sm z-10">
                             <span className="w-2 h-2 rounded-full bg-primary/40"></span>
-                            W/C {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                            W/C {new Date(weekStart).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
                         </h4>
                         {matches.map(match => {
                             const weekStart = getWeekStartDate(new Date(match.date));
