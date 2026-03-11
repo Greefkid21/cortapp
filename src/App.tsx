@@ -73,43 +73,21 @@ const calculateMatchStats = (match: Match, settings: any) => {
     }
 
     // Determine points & Winner
-    let t1Points = 0, t2Points = 0;
-    let winner = 'draw';
+    let t1Points = regularT1Sets;
+    let t2Points = regularT2Sets;
+    let winner = 'draw' as any;
     
-    if (regularT1Sets === 1 && regularT2Sets === 1) {
-         // Draw in regular sets (1-1) -> Tie Breaker Rules
-         // Each team gets points for winning their regular set
-         t1Points = settings.points_win;
-         t2Points = settings.points_win;
-         
-         if (match.tieBreaker) {
-             if (match.tieBreaker.team1 > match.tieBreaker.team2) {
-                 winner = 'team1';
-                 t1Points += 1;
-             } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
-                 winner = 'team2';
-                 t2Points += 1;
-             } else {
-                 winner = 'draw';
-             }
-         } else {
-             winner = 'draw';
-         }
-    } else {
-         // Standard Win/Loss (2-0 or 0-2)
-         if (t1Sets > t2Sets) {
-             winner = 'team1';
-             t1Points = settings.points_win;
-             t2Points = settings.points_loss;
-         } else if (t2Sets > t1Sets) {
-             winner = 'team2';
-             t2Points = settings.points_win;
-             t1Points = settings.points_loss;
-         } else {
-             t1Points = settings.points_draw;
-             t2Points = settings.points_draw;
-         }
+    if (match.tieBreaker) {
+        if (match.tieBreaker.team1 > match.tieBreaker.team2) {
+            t1Points += 1;
+        } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
+            t2Points += 1;
+        }
     }
+
+    if (t1Points > t2Points) winner = 'team1';
+    else if (t2Points > t1Points) winner = 'team2';
+    else winner = 'draw';
     
     return { t1Sets, t2Sets, t1Games, t2Games, t1Points, t2Points, winner };
 };
