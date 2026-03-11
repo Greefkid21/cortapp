@@ -270,7 +270,7 @@ function MainApp() {
     };
 
     fetchData();
-  }, [currentSeasonId]);
+  }, [currentSeasonId, settings]);
 
 
   const handleEditMatchResult = async (updatedMatch: Match) => {
