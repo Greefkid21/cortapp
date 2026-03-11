@@ -40,6 +40,79 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   return children;
 }
 
+// Helper to calculate stats for a match
+const calculateMatchStats = (match: Match, settings: any) => {
+    if (match.status !== 'completed') {
+         return { t1Sets: 0, t2Sets: 0, t1Games: 0, t2Games: 0, t1Points: 0, t2Points: 0, winner: null as any };
+    }
+
+    let t1Sets = 0, t2Sets = 0;
+    let t1Games = 0, t2Games = 0;
+    
+    let regularT1Sets = 0;
+    let regularT2Sets = 0;
+
+    match.sets.forEach(set => {
+        if (set.team1 > set.team2) regularT1Sets++;
+        else if (set.team2 > set.team1) regularT2Sets++;
+        t1Games += set.team1;
+        t2Games += set.team2;
+    });
+    
+    t1Sets = regularT1Sets;
+    t2Sets = regularT2Sets;
+
+    if (match.tieBreaker) {
+        if (match.tieBreaker.team1 > match.tieBreaker.team2) {
+            t1Sets++;
+            t1Games += 1;
+        } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
+            t2Sets++;
+            t2Games += 1;
+        }
+    }
+
+    // Determine points & Winner
+    let t1Points = 0, t2Points = 0;
+    let winner = 'draw';
+    
+    if (regularT1Sets === 1 && regularT2Sets === 1) {
+         // Draw in regular sets (1-1) -> Tie Breaker Rules
+         t1Points = 1;
+         t2Points = 1;
+         
+         if (match.tieBreaker) {
+             if (match.tieBreaker.team1 > match.tieBreaker.team2) {
+                 winner = 'team1';
+                 t1Points += 1;
+             } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
+                 winner = 'team2';
+                 t2Points += 1;
+             } else {
+                 winner = 'draw';
+             }
+         } else {
+             winner = 'draw';
+         }
+    } else {
+         // Standard Win/Loss (2-0 or 0-2)
+         if (t1Sets > t2Sets) {
+             winner = 'team1';
+             t1Points = settings.points_win;
+             t2Points = settings.points_loss;
+         } else if (t2Sets > t1Sets) {
+             winner = 'team2';
+             t2Points = settings.points_win;
+             t1Points = settings.points_loss;
+         } else {
+             t1Points = settings.points_draw;
+             t2Points = settings.points_draw;
+         }
+    }
+    
+    return { t1Sets, t2Sets, t1Games, t2Games, t1Points, t2Points, winner };
+};
+
 function MainApp() {
   const { inviteUser, users } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -121,27 +194,64 @@ function MainApp() {
             }));
           }
 
-          // Derive matches played from completed matches to ensure accuracy
+          // Derive ALL player stats from completed matches to ensure accuracy
           if (mappedPlayers.length > 0) {
-            const playedCounts: Record<string, number> = {};
+            const playerStats: Record<string, any> = {};
+            mappedPlayers.forEach(p => {
+                playerStats[p.id] = {
+                    matchesPlayed: 0,
+                    wins: 0,
+                    losses: 0,
+                    draws: 0,
+                    points: 0,
+                    setsWon: 0,
+                    setsLost: 0,
+                    gamesWon: 0,
+                    gamesLost: 0
+                };
+            });
 
             mappedMatches.forEach(match => {
               if (match.status === 'completed') {
-                [...match.team1, ...match.team2].forEach(pid => {
-                  playedCounts[pid] = (playedCounts[pid] || 0) + 1;
-                });
+                const stats = calculateMatchStats(match, settings);
+                if (stats.winner) {
+                    match.team1.forEach(pid => {
+                        if (!playerStats[pid]) return;
+                        playerStats[pid].matchesPlayed++;
+                        playerStats[pid].points += stats.t1Points;
+                        playerStats[pid].gamesWon += stats.t1Games;
+                        playerStats[pid].gamesLost += stats.t2Games;
+                        playerStats[pid].setsWon += stats.t1Sets;
+                        playerStats[pid].setsLost += stats.t2Sets;
+                        if (stats.winner === 'team1') playerStats[pid].wins++;
+                        else if (stats.winner === 'team2') playerStats[pid].losses++;
+                        else playerStats[pid].draws++;
+                    });
+                    match.team2.forEach(pid => {
+                        if (!playerStats[pid]) return;
+                        playerStats[pid].matchesPlayed++;
+                        playerStats[pid].points += stats.t2Points;
+                        playerStats[pid].gamesWon += stats.t2Games;
+                        playerStats[pid].gamesLost += stats.t1Games;
+                        playerStats[pid].setsWon += stats.t2Sets;
+                        playerStats[pid].setsLost += stats.t1Sets;
+                        if (stats.winner === 'team2') playerStats[pid].wins++;
+                        else if (stats.winner === 'team1') playerStats[pid].losses++;
+                        else playerStats[pid].draws++;
+                    });
+                }
               }
             });
 
-            const playersWithPlayed = mappedPlayers.map(p => ({
+            const playersWithStats = mappedPlayers.map(p => ({
               ...p,
               stats: {
-                ...p.stats,
-                matchesPlayed: playedCounts[p.id] || 0
+                ...playerStats[p.id],
+                gameDifference: (playerStats[p.id]?.gamesWon || 0) - (playerStats[p.id]?.gamesLost || 0)
               }
             }));
 
-            setPlayers(playersWithPlayed);
+            setPlayers(playersWithStats);
           } else if (mappedPlayers.length === 0 && playersData) {
             setPlayers(mappedPlayers);
           }
@@ -168,80 +278,9 @@ function MainApp() {
     const originalMatch = matches.find(m => m.id === updatedMatch.id);
     if (!originalMatch) return;
 
-    // Helper to calculate stats for a match
-    const calculateStats = (match: Match) => {
-        if (match.status !== 'completed') {
-             return { t1Sets: 0, t2Sets: 0, t1Games: 0, t2Games: 0, t1Points: 0, t2Points: 0, winner: null };
-        }
-
-        let t1Sets = 0, t2Sets = 0;
-        let t1Games = 0, t2Games = 0;
-        
-        let regularT1Sets = 0;
-        let regularT2Sets = 0;
-
-        match.sets.forEach(set => {
-            if (set.team1 > set.team2) regularT1Sets++;
-            else if (set.team2 > set.team1) regularT2Sets++;
-            t1Games += set.team1;
-            t2Games += set.team2;
-        });
-        
-        t1Sets = regularT1Sets;
-        t2Sets = regularT2Sets;
-
-        if (match.tieBreaker) {
-            if (match.tieBreaker.team1 > match.tieBreaker.team2) t1Sets++;
-            else if (match.tieBreaker.team2 > match.tieBreaker.team1) t2Sets++;
-            
-            t1Games += match.tieBreaker.team1;
-            t2Games += match.tieBreaker.team2;
-        }
-
-        // Determine points & Winner
-        let t1Points = 0, t2Points = 0;
-        let winner = 'draw';
-        
-        if (regularT1Sets === 1 && regularT2Sets === 1) {
-             // Draw in regular sets (1-1) -> Tie Breaker Rules
-             t1Points = 1;
-             t2Points = 1;
-             
-             if (match.tieBreaker) {
-                 if (match.tieBreaker.team1 > match.tieBreaker.team2) {
-                     winner = 'team1';
-                     t1Points += 1;
-                 } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
-                     winner = 'team2';
-                     t2Points += 1;
-                 } else {
-                     winner = 'draw';
-                 }
-             } else {
-                 winner = 'draw';
-             }
-        } else {
-             // Standard Win/Loss (2-0 or 0-2)
-             if (t1Sets > t2Sets) {
-                 winner = 'team1';
-                 t1Points = settings.points_win;
-                 t2Points = settings.points_loss;
-             } else if (t2Sets > t1Sets) {
-                 winner = 'team2';
-                 t2Points = settings.points_win;
-                 t1Points = settings.points_loss;
-             } else {
-                 t1Points = settings.points_draw;
-                 t2Points = settings.points_draw;
-             }
-        }
-        
-        return { t1Sets, t2Sets, t1Games, t2Games, t1Points, t2Points, winner };
-    };
-
-    const oldStats = calculateStats(originalMatch);
+    const oldStats = calculateMatchStats(originalMatch, settings);
     // Force new match to be completed for stat calculation
-    const newStats = calculateStats({ ...updatedMatch, status: 'completed' });
+    const newStats = calculateMatchStats({ ...updatedMatch, status: 'completed' }, settings);
 
     // Update DB Match
     if (supabase) {
