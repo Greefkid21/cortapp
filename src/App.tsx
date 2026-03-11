@@ -41,7 +41,7 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 }
 
 // Helper to calculate stats for a match
-const calculateMatchStats = (match: Match, settings: any) => {
+const calculateMatchStats = (match: Match) => {
     if (match.status !== 'completed') {
          return { t1Sets: 0, t2Sets: 0, t1Games: 0, t2Games: 0, t1Points: 0, t2Points: 0, winner: null as any };
     }
@@ -186,9 +186,9 @@ function MainApp() {
           });
 
           mappedMatches.forEach(match => {
-            if (match.status === 'completed') {
-              const stats = calculateMatchStats(match, settings);
-              if (stats.winner) {
+              if (match.status === 'completed') {
+                const stats = calculateMatchStats(match);
+                if (stats.winner) {
                   match.team1.forEach(pid => {
                       if (!playerStats[pid]) return;
                       playerStats[pid].matchesPlayed++;
@@ -256,7 +256,7 @@ function MainApp() {
 
     // Force new match to be completed for stat calculation
     const matchForStats = { ...updatedMatch, status: 'completed' as const };
-    const newStats = calculateMatchStats(matchForStats, settings);
+    const newStats = calculateMatchStats(matchForStats);
 
     // Update DB Match
     if (supabase) {
