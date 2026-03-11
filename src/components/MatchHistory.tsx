@@ -26,7 +26,7 @@ export function MatchHistory({ matches, players, onEditResult }: MatchHistoryPro
           team1: data.team1,
           team2: data.team2,
           sets: data.sets.map((s: any) => ({ team1: s.t1, team2: s.t2 })),
-          tieBreaker: data.tieBreaker,
+          tieBreaker: data.tieBreaker ? { team1: data.tieBreaker.t1, team2: data.tieBreaker.t2 } : undefined,
           // winner/status will be recalculated in App.tsx
       };
       
@@ -64,6 +64,7 @@ export function MatchHistory({ matches, players, onEditResult }: MatchHistoryPro
       <div className="space-y-3">
         {matches.map(match => {
           const scoreDisplay = match.sets.map(s => `${s.team1}-${s.team2}`).join(', ');
+          const tieBreakerDisplay = match.tieBreaker ? ` (${match.tieBreaker.team1}-${match.tieBreaker.team2})` : '';
           
           return (
             <div key={match.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col gap-3 relative group">
@@ -92,7 +93,7 @@ export function MatchHistory({ matches, players, onEditResult }: MatchHistoryPro
                 {/* Score */}
                 <div className="flex flex-col items-center px-4">
                    <div className="text-lg font-bold tracking-wider text-slate-800 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">
-                     {scoreDisplay}
+                     {scoreDisplay}{tieBreakerDisplay}
                    </div>
                 </div>
 
