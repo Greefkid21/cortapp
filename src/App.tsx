@@ -105,159 +105,158 @@ function MainApp() {
     }
   }, [settings?.league_name]);
 
+  const fetchData = async () => {
+    setLoadingData(true);
+    if (supabase) {
+      try {
+        let mappedPlayers: Player[] = [];
+        let mappedMatches: Match[] = [];
+
+        // Fetch Players
+        const { data: playersData } = await supabase
+          .from('players')
+          .select('*');
+        
+        if (playersData) {
+          mappedPlayers = playersData.map(p => ({
+            id: p.id,
+            name: p.name,
+            avatar: p.avatar,
+            seed: p.seed,
+            stats: {
+              matchesPlayed: p.played || 0,
+              wins: p.wins || 0,
+              losses: p.losses || 0,
+              draws: p.draws || 0,
+              points: p.points || 0,
+              setsWon: p.sets_won || 0,
+              setsLost: p.sets_lost || 0,
+              gamesWon: p.games_won || 0,
+              gamesLost: p.games_lost || 0,
+              gameDifference: (p.games_won || 0) - (p.games_lost || 0)
+            }
+          }));
+          setPlayers(mappedPlayers);
+        }
+
+        // Fetch Matches (filtered by current season if applicable)
+        let query = supabase.from('matches').select('*');
+        if (currentSeasonId) {
+          query = query.eq('season_id', currentSeasonId);
+        }
+        
+        const { data: matchesData } = await query.order('date', { ascending: false });
+        
+        if (matchesData) {
+          mappedMatches = matchesData.map(m => ({
+            id: m.id,
+            date: new Date(m.date).toISOString().split('T')[0],
+            team1: [m.team1_player1_id, m.team1_player2_id].filter(Boolean) as string[],
+            team2: [m.team2_player1_id, m.team2_player2_id].filter(Boolean) as string[],
+            sets: [
+              { team1: parseInt(m.set1_score?.split('-')[0] || '0'), team2: parseInt(m.set1_score?.split('-')[1] || '0') },
+              { team1: parseInt(m.set2_score?.split('-')[0] || '0'), team2: parseInt(m.set2_score?.split('-')[1] || '0') }
+            ],
+            tieBreaker: m.set3_score ? {
+              team1: parseInt(m.set3_score.split('-')[0] || '0'),
+              team2: parseInt(m.set3_score.split('-')[1] || '0')
+            } : undefined,
+            winner: m.winner as 'team1' | 'team2' | 'draw',
+            status: m.status as 'scheduled' | 'completed' | 'postponed',
+            postponed: m.status === 'postponed',
+            availability: m.availability || {}
+          }));
+        }
+
+        // Derive ALL player stats from completed matches to ensure accuracy
+        if (mappedPlayers.length > 0) {
+          const playerStats: Record<string, any> = {};
+          mappedPlayers.forEach(p => {
+              playerStats[p.id] = {
+                  matchesPlayed: 0,
+                  wins: 0,
+                  losses: 0,
+                  draws: 0,
+                  points: 0,
+                  setsWon: 0,
+                  setsLost: 0,
+                  gamesWon: 0,
+                  gamesLost: 0
+              };
+          });
+
+          mappedMatches.forEach(match => {
+            if (match.status === 'completed') {
+              const stats = calculateMatchStats(match, settings);
+              if (stats.winner) {
+                  match.team1.forEach(pid => {
+                      if (!playerStats[pid]) return;
+                      playerStats[pid].matchesPlayed++;
+                      playerStats[pid].points += stats.t1Points;
+                      playerStats[pid].gamesWon += stats.t1Games;
+                      playerStats[pid].gamesLost += stats.t2Games;
+                      playerStats[pid].setsWon += stats.t1Sets;
+                      playerStats[pid].setsLost += stats.t2Sets;
+                      if (stats.winner === 'team1') playerStats[pid].wins++;
+                      else if (stats.winner === 'team2') playerStats[pid].losses++;
+                      else playerStats[pid].draws++;
+                  });
+                  match.team2.forEach(pid => {
+                      if (!playerStats[pid]) return;
+                      playerStats[pid].matchesPlayed++;
+                      playerStats[pid].points += stats.t2Points;
+                      playerStats[pid].gamesWon += stats.t2Games;
+                      playerStats[pid].gamesLost += stats.t1Games;
+                      playerStats[pid].setsWon += stats.t2Sets;
+                      playerStats[pid].setsLost += stats.t1Sets;
+                      if (stats.winner === 'team2') playerStats[pid].wins++;
+                      else if (stats.winner === 'team1') playerStats[pid].losses++;
+                      else playerStats[pid].draws++;
+                  });
+              }
+            }
+          });
+
+          const playersWithStats = mappedPlayers.map(p => ({
+            ...p,
+            stats: {
+              ...playerStats[p.id],
+              gameDifference: (playerStats[p.id]?.gamesWon || 0) - (playerStats[p.id]?.gamesLost || 0)
+            }
+          }));
+
+          setPlayers(playersWithStats);
+        } else if (mappedPlayers.length === 0 && playersData) {
+          setPlayers(mappedPlayers);
+        }
+
+        setMatches(mappedMatches);
+
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    } else {
+      // No Supabase connection - empty state
+      setPlayers([]);
+      setMatches([]);
+    }
+    setLoadingData(false);
+  };
+
   // Fetch Data
   useEffect(() => {
-    const fetchData = async () => {
-      setLoadingData(true);
-      if (supabase) {
-        try {
-          let mappedPlayers: Player[] = [];
-          let mappedMatches: Match[] = [];
-
-          // Fetch Players
-          const { data: playersData } = await supabase
-            .from('players')
-            .select('*');
-          
-          if (playersData) {
-            mappedPlayers = playersData.map(p => ({
-              id: p.id,
-              name: p.name,
-              avatar: p.avatar,
-              seed: p.seed,
-              stats: {
-                matchesPlayed: p.played || 0,
-                wins: p.wins || 0,
-                losses: p.losses || 0,
-                draws: p.draws || 0,
-                points: p.points || 0,
-                setsWon: p.sets_won || 0,
-                setsLost: p.sets_lost || 0,
-                gamesWon: p.games_won || 0,
-                gamesLost: p.games_lost || 0,
-                gameDifference: (p.games_won || 0) - (p.games_lost || 0)
-              }
-            }));
-            setPlayers(mappedPlayers);
-          }
-
-          // Fetch Matches (filtered by current season if applicable)
-          // For now, we fetch all and filter in memory or fetch by season_id if set
-          let query = supabase.from('matches').select('*');
-          if (currentSeasonId) {
-            query = query.eq('season_id', currentSeasonId);
-          }
-          
-          const { data: matchesData } = await query.order('date', { ascending: false });
-          
-          if (matchesData) {
-            mappedMatches = matchesData.map(m => ({
-              id: m.id,
-              date: new Date(m.date).toISOString().split('T')[0],
-              team1: [m.team1_player1_id, m.team1_player2_id].filter(Boolean) as string[],
-              team2: [m.team2_player1_id, m.team2_player2_id].filter(Boolean) as string[],
-              sets: [
-                { team1: parseInt(m.set1_score?.split('-')[0] || '0'), team2: parseInt(m.set1_score?.split('-')[1] || '0') },
-                { team1: parseInt(m.set2_score?.split('-')[0] || '0'), team2: parseInt(m.set2_score?.split('-')[1] || '0') }
-              ],
-              tieBreaker: m.set3_score ? {
-                team1: parseInt(m.set3_score.split('-')[0] || '0'),
-                team2: parseInt(m.set3_score.split('-')[1] || '0')
-              } : undefined,
-              winner: m.winner as 'team1' | 'team2' | 'draw',
-              status: m.status as 'scheduled' | 'completed' | 'postponed',
-              postponed: m.status === 'postponed',
-              availability: m.availability || {}
-            }));
-          }
-
-          // Derive ALL player stats from completed matches to ensure accuracy
-          if (mappedPlayers.length > 0) {
-            const playerStats: Record<string, any> = {};
-            mappedPlayers.forEach(p => {
-                playerStats[p.id] = {
-                    matchesPlayed: 0,
-                    wins: 0,
-                    losses: 0,
-                    draws: 0,
-                    points: 0,
-                    setsWon: 0,
-                    setsLost: 0,
-                    gamesWon: 0,
-                    gamesLost: 0
-                };
-            });
-
-            mappedMatches.forEach(match => {
-              if (match.status === 'completed') {
-                const stats = calculateMatchStats(match, settings);
-                if (stats.winner) {
-                    match.team1.forEach(pid => {
-                        if (!playerStats[pid]) return;
-                        playerStats[pid].matchesPlayed++;
-                        playerStats[pid].points += stats.t1Points;
-                        playerStats[pid].gamesWon += stats.t1Games;
-                        playerStats[pid].gamesLost += stats.t2Games;
-                        playerStats[pid].setsWon += stats.t1Sets;
-                        playerStats[pid].setsLost += stats.t2Sets;
-                        if (stats.winner === 'team1') playerStats[pid].wins++;
-                        else if (stats.winner === 'team2') playerStats[pid].losses++;
-                        else playerStats[pid].draws++;
-                    });
-                    match.team2.forEach(pid => {
-                        if (!playerStats[pid]) return;
-                        playerStats[pid].matchesPlayed++;
-                        playerStats[pid].points += stats.t2Points;
-                        playerStats[pid].gamesWon += stats.t2Games;
-                        playerStats[pid].gamesLost += stats.t1Games;
-                        playerStats[pid].setsWon += stats.t2Sets;
-                        playerStats[pid].setsLost += stats.t1Sets;
-                        if (stats.winner === 'team2') playerStats[pid].wins++;
-                        else if (stats.winner === 'team1') playerStats[pid].losses++;
-                        else playerStats[pid].draws++;
-                    });
-                }
-              }
-            });
-
-            const playersWithStats = mappedPlayers.map(p => ({
-              ...p,
-              stats: {
-                ...playerStats[p.id],
-                gameDifference: (playerStats[p.id]?.gamesWon || 0) - (playerStats[p.id]?.gamesLost || 0)
-              }
-            }));
-
-            setPlayers(playersWithStats);
-          } else if (mappedPlayers.length === 0 && playersData) {
-            setPlayers(mappedPlayers);
-          }
-
-          setMatches(mappedMatches);
-
-        } catch (error) {
-          console.error('Error fetching data:', error);
-        }
-      } else {
-        // No Supabase connection - empty state
-        setPlayers([]);
-        setMatches([]);
-      }
-      setLoadingData(false);
-    };
-
     fetchData();
   }, [currentSeasonId, settings]);
 
 
   const handleEditMatchResult = async (updatedMatch: Match) => {
-    // 1. Find original match to revert stats
+    // 1. Find original match to ensure it exists
     const originalMatch = matches.find(m => m.id === updatedMatch.id);
     if (!originalMatch) return;
 
-    const oldStats = calculateMatchStats(originalMatch, settings);
     // Force new match to be completed for stat calculation
-    const newStats = calculateMatchStats({ ...updatedMatch, status: 'completed' }, settings);
+    const matchForStats = { ...updatedMatch, status: 'completed' as const };
+    const newStats = calculateMatchStats(matchForStats, settings);
 
     // Update DB Match
     if (supabase) {
@@ -274,6 +273,10 @@ function MainApp() {
             return;
         }
 
+        // Recalculate and update player stats in DB (for caching/sync)
+        // We'll trigger a full re-fetch locally which will derive stats correctly
+        await fetchData();
+
         // Send Email Notification
         const participants = getParticipantsFromData(updatedMatch, players, users);
         const subject = `Match Update: ${participants.names.join(' vs ')}`;
@@ -288,117 +291,12 @@ function MainApp() {
         if (participants.emails.length > 0) {
             sendEmailNotification(participants.emails, subject, html);
         }
+    } else {
+        // Offline mode
+        setMatches(prev => prev.map(m => m.id === updatedMatch.id ? { ...updatedMatch, winner: newStats.winner, status: 'completed' } : m));
+        // Recalculate players locally
+        fetchData();
     }
-
-    // Update Players
-    setPlayers(prev => prev.map(p => {
-        const inOldTeam1 = originalMatch.team1.includes(p.id);
-        const inOldTeam2 = originalMatch.team2.includes(p.id);
-        const inNewTeam1 = updatedMatch.team1.includes(p.id);
-        const inNewTeam2 = updatedMatch.team2.includes(p.id);
-
-        if (!inOldTeam1 && !inOldTeam2 && !inNewTeam1 && !inNewTeam2) return p;
-
-        let diffWins = 0, diffLosses = 0, diffDraws = 0;
-        let diffPoints = 0;
-        let diffSetsWon = 0, diffSetsLost = 0;
-        let diffGamesWon = 0, diffGamesLost = 0;
-        let diffPlayed = 0;
-
-        if (originalMatch.status === 'completed' && (inOldTeam1 || inOldTeam2)) {
-             diffPlayed -= 1;
-        }
-
-        if (inNewTeam1 || inNewTeam2) {
-             diffPlayed += 1;
-        }
-
-        // Revert Old Stats
-        if (inOldTeam1 || inOldTeam2) {
-             const isTeam1 = inOldTeam1;
-             const myPoints = isTeam1 ? oldStats.t1Points : oldStats.t2Points;
-             const myGamesWon = isTeam1 ? oldStats.t1Games : oldStats.t2Games;
-             const myGamesLost = isTeam1 ? oldStats.t2Games : oldStats.t1Games;
-             const mySetsWon = isTeam1 ? oldStats.t1Sets : oldStats.t2Sets;
-             const mySetsLost = isTeam1 ? oldStats.t2Sets : oldStats.t1Sets;
-             
-             let statWin = 0, statLoss = 0, statDraw = 0;
-             if (oldStats.winner) {
-                if (oldStats.winner === (isTeam1 ? 'team1' : 'team2')) statWin = 1;
-                else if (oldStats.winner === (isTeam1 ? 'team2' : 'team1')) statLoss = 1;
-                else statDraw = 1;
-             }
-
-             diffWins -= statWin;
-             diffLosses -= statLoss;
-             diffDraws -= statDraw;
-             diffPoints -= myPoints;
-             diffSetsWon -= mySetsWon;
-             diffSetsLost -= mySetsLost;
-             diffGamesWon -= myGamesWon;
-             diffGamesLost -= myGamesLost;
-        }
-
-        // Apply New Stats
-        if (inNewTeam1 || inNewTeam2) {
-             const isTeam1 = inNewTeam1;
-             const myPoints = isTeam1 ? newStats.t1Points : newStats.t2Points;
-             const myGamesWon = isTeam1 ? newStats.t1Games : newStats.t2Games;
-             const myGamesLost = isTeam1 ? newStats.t2Games : newStats.t1Games;
-             const mySetsWon = isTeam1 ? newStats.t1Sets : newStats.t2Sets;
-             const mySetsLost = isTeam1 ? newStats.t2Sets : newStats.t1Sets;
-
-             let statWin = 0, statLoss = 0, statDraw = 0;
-             if (newStats.winner === (isTeam1 ? 'team1' : 'team2')) statWin = 1;
-             else if (newStats.winner === (isTeam1 ? 'team2' : 'team1')) statLoss = 1;
-             else statDraw = 1;
-
-             diffWins += statWin;
-             diffLosses += statLoss;
-             diffDraws += statDraw;
-             diffPoints += myPoints;
-             diffSetsWon += mySetsWon;
-             diffSetsLost += mySetsLost;
-             diffGamesWon += myGamesWon;
-             diffGamesLost += myGamesLost;
-        }
-
-        const updatedStats = {
-            ...p.stats,
-            matchesPlayed: (p.stats.matchesPlayed || 0) + diffPlayed,
-            wins: (p.stats.wins || 0) + diffWins,
-            losses: (p.stats.losses || 0) + diffLosses,
-            draws: (p.stats.draws || 0) + diffDraws,
-            points: (p.stats.points || 0) + diffPoints,
-            setsWon: (p.stats.setsWon || 0) + diffSetsWon,
-            setsLost: (p.stats.setsLost || 0) + diffSetsLost,
-            gamesWon: (p.stats.gamesWon || 0) + diffGamesWon,
-            gamesLost: (p.stats.gamesLost || 0) + diffGamesLost,
-            gameDifference: ((p.stats.gamesWon || 0) + diffGamesWon) - ((p.stats.gamesLost || 0) + diffGamesLost)
-        };
-        
-        // Update DB player
-        if (supabase) {
-             supabase.from('players').update({
-                played: updatedStats.matchesPlayed,
-                wins: updatedStats.wins,
-                losses: updatedStats.losses,
-                draws: updatedStats.draws,
-                points: updatedStats.points,
-                sets_won: updatedStats.setsWon,
-                sets_lost: updatedStats.setsLost,
-                games_won: updatedStats.gamesWon,
-                games_lost: updatedStats.gamesLost
-             }).eq('id', p.id).then(({ error }) => {
-                 if (error) console.error('Error updating player stats:', error);
-             });
-        }
-
-        return { ...p, stats: updatedStats };
-    }));
-
-    // Update Matches State
-    setMatches(prev => prev.map(m => m.id === updatedMatch.id ? { ...updatedMatch, winner: newStats.winner as any, status: 'completed' } : m));
   };
 
   const handleUpdateMatch = async (updated: Match) => {
