@@ -78,8 +78,9 @@ const calculateMatchStats = (match: Match, settings: any) => {
     
     if (regularT1Sets === 1 && regularT2Sets === 1) {
          // Draw in regular sets (1-1) -> Tie Breaker Rules
-         t1Points = 1;
-         t2Points = 1;
+         // Each team gets points for winning their regular set
+         t1Points = settings.points_win;
+         t2Points = settings.points_win;
          
          if (match.tieBreaker) {
              if (match.tieBreaker.team1 > match.tieBreaker.team2) {
