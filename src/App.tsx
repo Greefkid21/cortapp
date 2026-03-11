@@ -48,43 +48,41 @@ const calculateMatchStats = (match: Match, settings: any) => {
 
     let t1Sets = 0, t2Sets = 0;
     let t1Games = 0, t2Games = 0;
-    
-    let regularT1Sets = 0;
-    let regularT2Sets = 0;
+    let t1Points = 0, t2Points = 0;
 
     match.sets.forEach(set => {
-        if (set.team1 > set.team2) regularT1Sets++;
-        else if (set.team2 > set.team1) regularT2Sets++;
         t1Games += set.team1;
         t2Games += set.team2;
+
+        // Rule: 1 point per FULL set won.
+        // A full set is defined as one where at least one team reaches 6 games.
+        if (set.team1 >= 6 || set.team2 >= 6) {
+            if (set.team1 > set.team2) {
+                t1Sets++;
+                t1Points++;
+            } else if (set.team2 > set.team1) {
+                t2Sets++;
+                t2Points++;
+            }
+        }
     });
-    
-    t1Sets = regularT1Sets;
-    t2Sets = regularT2Sets;
 
     if (match.tieBreaker) {
         if (match.tieBreaker.team1 > match.tieBreaker.team2) {
-            t1Sets++;
+            // Rule: Win the super tie-breaker -> additional 1 point
+            t1Points += 1;
+            // Rule: Additional game towards +/- for STB win
             t1Games += 1;
         } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
-            t2Sets++;
+            t2Points += 1;
             t2Games += 1;
         }
+        // If STB is 8-8 (draw), no additional points are added.
+        // Teams keep their 1 point each from the regular sets.
     }
 
-    // Determine points & Winner
-    let t1Points = regularT1Sets;
-    let t2Points = regularT2Sets;
+    // Determine winner based on total points for the match
     let winner = 'draw' as any;
-    
-    if (match.tieBreaker) {
-        if (match.tieBreaker.team1 > match.tieBreaker.team2) {
-            t1Points += 1;
-        } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
-            t2Points += 1;
-        }
-    }
-
     if (t1Points > t2Points) winner = 'team1';
     else if (t2Points > t1Points) winner = 'team2';
     else winner = 'draw';
