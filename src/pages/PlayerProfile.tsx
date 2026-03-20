@@ -1,9 +1,10 @@
 import { useParams, Link } from 'react-router-dom';
 import { Player, Match } from '../types';
-import { Trophy, TrendingUp, ArrowLeft, Camera, Loader2 } from 'lucide-react';
+import { Trophy, TrendingUp, ArrowLeft, Camera, Loader2, Calendar } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { cn } from '../lib/utils';
 
 interface PlayerProfileProps {
   players: Player[];
@@ -115,6 +116,8 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
       .sort((a, b) => b.total - a.total); // Sort by most games played
   }, [playerMatches, player, players]);
 
+  const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
+
   if (!player) {
     return <div className="p-8 text-center">Player not found</div>;
   }
@@ -212,6 +215,52 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
         ) : (
             <p className="text-slate-500 text-sm">No matches played yet.</p>
         )}
+      </div>
+
+      {/* Match Results */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            Season Match Results
+        </h3>
+        <div className="space-y-3">
+          {playerMatches.length > 0 ? playerMatches.map(match => {
+            const scoreDisplay = match.sets.map(s => `${s.team1}-${s.team2}`).join(', ');
+            const tieBreakerDisplay = match.tieBreaker ? ` (${match.tieBreaker.team1}-${match.tieBreaker.team2})` : '';
+            
+            return (
+              <div key={match.id} className="bg-slate-50 rounded-xl p-4 flex flex-col gap-3">
+                <div className="flex justify-between items-center text-xs text-slate-400">
+                  <span>{match.date}</span>
+                  <span className="bg-white px-2 py-0.5 rounded-full text-slate-600 shadow-sm">Finished</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  {/* Team 1 */}
+                  <div className={cn("flex-1 flex flex-col gap-1", match.winner === 'team1' && "font-bold text-slate-900")}>
+                    <Link to={`/player/${match.team1[0]}`} className="text-sm hover:underline">{getPlayerName(match.team1[0])}</Link>
+                    <Link to={`/player/${match.team1[1]}`} className="text-sm hover:underline">{getPlayerName(match.team1[1])}</Link>
+                  </div>
+
+                  {/* Score */}
+                  <div className="flex flex-col items-center px-4">
+                     <div className="text-sm font-bold tracking-wider text-slate-800 bg-white px-3 py-1 rounded-lg border border-slate-100 shadow-sm whitespace-nowrap">
+                       {scoreDisplay}{tieBreakerDisplay}
+                     </div>
+                  </div>
+
+                  {/* Team 2 */}
+                  <div className={cn("flex-1 flex flex-col gap-1 text-right", match.winner === 'team2' && "font-bold text-slate-900")}>
+                    <Link to={`/player/${match.team2[0]}`} className="text-sm hover:underline">{getPlayerName(match.team2[0])}</Link>
+                    <Link to={`/player/${match.team2[1]}`} className="text-sm hover:underline">{getPlayerName(match.team2[1])}</Link>
+                  </div>
+                </div>
+              </div>
+            );
+          }) : (
+            <p className="text-slate-500 text-sm">No matches found for this player.</p>
+          )}
+        </div>
       </div>
 
       {/* Head to Head */}
