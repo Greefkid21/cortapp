@@ -23,6 +23,8 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [newDate, setNewDate] = useState<string>('');
   const [newStatus, setNewStatus] = useState<Match['status']>('scheduled');
+  const [newTime, setNewTime] = useState<string>('');
+  const [newVenue, setNewVenue] = useState<string>('');
   const [editTeam1, setEditTeam1] = useState<string[]>([]);
   const [editTeam2, setEditTeam2] = useState<string[]>([]);
   
@@ -34,6 +36,8 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
     setRescheduleId(m.id);
     setNewDate(m.date);
     setNewStatus(m.status);
+    setNewTime(m.time || '');
+    setNewVenue(m.venue || '');
     setEditTeam1([...m.team1]);
     setEditTeam2([...m.team2]);
   };
@@ -46,11 +50,15 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
         ...m, 
         date: newDate || m.date, 
         status: newStatus,
+        time: newTime || undefined,
+        venue: newVenue || undefined,
         team1: editTeam1,
         team2: editTeam2
     });
     setRescheduleId(null);
     setNewDate('');
+    setNewTime('');
+    setNewVenue('');
   };
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
@@ -119,6 +127,23 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
                                             <MatchAvailabilityStatus match={match} />
                                         </div>
                                     </div>
+                                    
+                                    {(match.time || match.venue) && (
+                                        <div className="flex items-center gap-3 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                                            {match.time && (
+                                                <div className="flex items-center gap-1 text-slate-600 font-semibold">
+                                                    <Calendar className="w-3 h-3" />
+                                                    <span>{match.time}</span>
+                                                </div>
+                                            )}
+                                            {match.venue && (
+                                                <div className="flex items-center gap-1 text-primary font-semibold">
+                                                    <HelpCircle className="w-3 h-3" />
+                                                    <span>{match.venue}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     <div className="flex items-center gap-3 ml-auto">
                                     {(isAdmin) && (
@@ -227,6 +252,28 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
                   <option value="scheduled">Scheduled</option>
                   <option value="postponed">Postponed</option>
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="text-sm font-bold text-slate-700">Time</label>
+                    <input
+                        type="time"
+                        value={newTime}
+                        onChange={(e) => setNewTime(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mt-1 focus:ring-2 focus:ring-primary outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="text-sm font-bold text-slate-700">Venue</label>
+                    <input
+                        type="text"
+                        placeholder="e.g. Court 1"
+                        value={newVenue}
+                        onChange={(e) => setNewVenue(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mt-1 focus:ring-2 focus:ring-primary outline-none text-sm"
+                    />
+                </div>
               </div>
 
               {/* Player Editing Section */}

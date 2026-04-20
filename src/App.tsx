@@ -164,7 +164,9 @@ function MainApp() {
             winner: m.winner as 'team1' | 'team2' | 'draw',
             status: m.status as 'scheduled' | 'completed' | 'postponed',
             postponed: m.status === 'postponed',
-            availability: m.availability || {}
+            availability: m.availability || {},
+            time: m.time,
+            venue: m.venue
           }));
         }
 
@@ -303,6 +305,8 @@ function MainApp() {
     if (supabase) {
         const { error } = await supabase.from('matches').update({
             date: updated.date,
+            time: updated.time,
+            venue: updated.venue,
             status: updated.status,
             winner: updated.winner,
             team1_player1_id: updated.team1[0],

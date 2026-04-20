@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { Player, Match } from '../types';
-import { Trophy, TrendingUp, ArrowLeft, Camera, Loader2, Calendar } from 'lucide-react';
+import { Trophy, TrendingUp, ArrowLeft, Camera, Loader2, Calendar, HelpCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -71,28 +71,37 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
     if (!player) return [];
     return matches
       .filter(m => 
-        m.status === 'completed' && 
         (m.team1.includes(player.id) || m.team2.includes(player.id))
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [matches, player]);
 
+  const completedMatches = useMemo(() => {
+    return playerMatches.filter(m => m.status === 'completed');
+  }, [playerMatches]);
+
+  const upcomingMatches = useMemo(() => {
+    return playerMatches
+      .filter(m => m.status !== 'completed')
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [playerMatches]);
+
   // 2. Calculate Recent Form (Last 5 matches)
   const recentForm = useMemo(() => {
-    return playerMatches.slice(0, 5).map(m => {
+    return completedMatches.slice(0, 5).map(m => {
       const isTeam1 = m.team1.includes(player!.id);
       const isWinner = (isTeam1 && m.winner === 'team1') || (!isTeam1 && m.winner === 'team2');
       const isDraw = m.winner === 'draw';
       return { id: m.id, result: isDraw ? 'draw' : (isWinner ? 'win' : 'loss') };
     });
-  }, [playerMatches, player]);
+  }, [completedMatches, player]);
 
   // 3. Head-to-Head Stats
   const headToHead = useMemo(() => {
     if (!player) return [];
     const stats: Record<string, { wins: number; losses: number; draws: number; total: number }> = {};
 
-    playerMatches.forEach(m => {
+    completedMatches.forEach(m => {
       const isTeam1 = m.team1.includes(player.id);
       const opponents = isTeam1 ? m.team2 : m.team1;
       const isWinner = (isTeam1 && m.winner === 'team1') || (!isTeam1 && m.winner === 'team2');
@@ -114,7 +123,7 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
       }))
       .filter(item => item.opponent) // Filter out unknown players
       .sort((a, b) => b.total - a.total); // Sort by most games played
-  }, [playerMatches, player, players]);
+  }, [completedMatches, player, players]);
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
 
@@ -217,14 +226,61 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
         )}
       </div>
 
-      {/* Match Results */}
+      {/* Upcoming Matches */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-primary" />
+            Next Matches
+        </h3>
+        <div className="space-y-3">
+          {upcomingMatches.length > 0 ? upcomingMatches.map(match => (
+            <div key={match.id} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{match.date}</span>
+                <span className="bg-white px-2 py-0.5 rounded-full text-xs font-medium text-slate-600 shadow-sm border border-slate-100 capitalize">
+                  {match.status}
+                </span>
+              </div>
+              <div className="flex justify-between items-center gap-4">
+                <div className="flex-1 text-sm text-slate-700">
+                  {getPlayerName(match.team1[0])} & {getPlayerName(match.team1[1])}
+                </div>
+                <div className="text-xs font-bold text-slate-400">VS</div>
+                <div className="flex-1 text-sm text-slate-700 text-right">
+                  {getPlayerName(match.team2[0])} & {getPlayerName(match.team2[1])}
+                </div>
+              </div>
+              {(match.time || match.venue) && (
+                <div className="mt-3 pt-3 border-t border-slate-200/50 flex gap-4">
+                  {match.time && (
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {match.time}
+                    </div>
+                  )}
+                  {match.venue && (
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      {match.venue}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )) : (
+            <p className="text-slate-500 text-sm italic">No upcoming matches scheduled.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Match Results */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" />
             Season Match Results
         </h3>
         <div className="space-y-3">
-          {playerMatches.length > 0 ? playerMatches.map(match => {
+          {completedMatches.length > 0 ? completedMatches.map(match => {
             const scoreDisplay = match.sets.map(s => `${s.team1}-${s.team2}`).join(', ');
             const tieBreakerDisplay = match.tieBreaker ? ` (${match.tieBreaker.team1}-${match.tieBreaker.team2})` : '';
             

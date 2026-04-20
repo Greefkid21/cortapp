@@ -20,6 +20,8 @@ export interface Player {
 export interface Match {
   id: string;
   date: string;
+  time?: string; // e.g., '18:00'
+  venue?: string; // e.g., 'Court 1'
   // Store player IDs
   team1: string[]; // [player1Id, player2Id]
   team2: string[]; // [player3Id, player4Id]
