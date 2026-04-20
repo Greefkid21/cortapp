@@ -478,7 +478,7 @@ function MainApp() {
         <Route path="login" element={<Login />} />
 
         {/* Protected Routes */}
-        <Route index element={<RequireAuth><Home players={players} /></RequireAuth>} />
+        <Route index element={<RequireAuth><Home players={players} matches={matches} /></RequireAuth>} />
         <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
         <Route path="rules" element={<RequireAuth><Rules /></RequireAuth>} />

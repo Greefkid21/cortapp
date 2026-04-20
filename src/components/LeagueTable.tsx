@@ -1,18 +1,27 @@
-import { Player } from '../types';
+import { Player, Match } from '../types';
 import { cn } from '../lib/utils';
-import { Medal } from 'lucide-react';
+import { Medal, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface LeagueTableProps {
   players: Player[];
+  matches: Match[];
 }
 
-export function LeagueTable({ players }: LeagueTableProps) {
+export function LeagueTable({ players, matches }: LeagueTableProps) {
   // Sort players by points (desc), then net sets/games if needed
   const sortedPlayers = [...players].sort((a, b) => {
     if (b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
     return (b.stats.gameDifference || 0) - (a.stats.gameDifference || 0);
   });
+
+  const getNextMatchDate = (playerId: string) => {
+    const playerMatches = matches
+      .filter(m => m.status !== 'completed' && (m.team1.includes(playerId) || m.team2.includes(playerId)))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    return playerMatches.length > 0 ? playerMatches[0].date : null;
+  };
 
   return (
     <div className="space-y-4">
@@ -34,6 +43,8 @@ export function LeagueTable({ players }: LeagueTableProps) {
             <tbody className="divide-y divide-slate-100">
               {sortedPlayers.map((player, index) => {
                 const isTop3 = index < 3;
+                const nextMatchDate = getNextMatchDate(player.id);
+                
                 return (
                   <tr
                     key={player.id}
@@ -68,10 +79,20 @@ export function LeagueTable({ players }: LeagueTableProps) {
                             </span>
                           )}
                         </div>
-                        <span className={cn("font-medium", index === 0 ? "text-slate-900 font-bold" : "text-slate-700")}>
-                            {player.name}
-                        </span>
-                        {index === 0 && <Medal className="w-4 h-4 text-yellow-400 fill-yellow-400 ml-auto sm:ml-0" />}
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                                <span className={cn("font-medium", index === 0 ? "text-slate-900 font-bold" : "text-slate-700")}>
+                                    {player.name}
+                                </span>
+                                {index === 0 && <Medal className="w-4 h-4 text-yellow-400 fill-yellow-400" />}
+                            </div>
+                            {nextMatchDate && (
+                                <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                                    <Calendar className="w-3 h-3" />
+                                    <span>Next: {nextMatchDate}</span>
+                                </div>
+                            )}
+                        </div>
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-center text-slate-500">{player.stats.matchesPlayed}</td>
