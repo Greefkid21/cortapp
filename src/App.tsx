@@ -303,25 +303,34 @@ function MainApp() {
 
   const handleUpdateMatch = async (updated: Match) => {
     if (supabase) {
-        const { error } = await supabase.from('matches').update({
+        // Build the update object dynamically to avoid errors if columns are missing
+        const updateData: any = {
             date: updated.date,
-            time: updated.time,
-            venue: updated.venue,
             status: updated.status,
             winner: updated.winner,
             team1_player1_id: updated.team1[0],
             team1_player2_id: updated.team1[1],
             team2_player1_id: updated.team2[0],
             team2_player2_id: updated.team2[1]
-        }).eq('id', updated.id);
+        };
+
+        // Only add time and venue if they are present
+        if (updated.time !== undefined) updateData.time = updated.time;
+        if (updated.venue !== undefined) updateData.venue = updated.venue;
+
+        const { error } = await supabase.from('matches').update(updateData).eq('id', updated.id);
         
         if (error) {
             console.error('Error updating match:', error);
-            alert('Failed to update match: ' + error.message);
+            if (error.message.includes("column") && error.message.includes("not find")) {
+                alert("Database Update Needed: Please add 'time' (text) and 'venue' (text) columns to your 'matches' table in Supabase to use these features.");
+            } else {
+                alert(`Failed to update match: ${error.message}`);
+            }
             return;
         }
-
-        setMatches(prev => prev.map(m => (m.id === updated.id ? updated : m)));
+        
+        fetchData();
     } else {
         setMatches(prev => prev.map(m => (m.id === updated.id ? updated : m)));
     }

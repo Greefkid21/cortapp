@@ -160,10 +160,10 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
                                         <button
                                         onClick={() => startReschedule(match)}
                                         className="flex items-center gap-1 text-amber-700 font-bold hover:text-amber-800 p-1"
-                                        title="Edit Match"
+                                        title="Reschedule Match"
                                         >
                                         <Edit2 className="w-3 h-3" />
-                                        <span className="hidden sm:inline">Edit</span>
+                                        <span className="hidden sm:inline">Reschedule</span>
                                         </button>
                                     )}
                                     <button 
