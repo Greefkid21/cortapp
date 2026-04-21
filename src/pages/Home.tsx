@@ -81,7 +81,7 @@ export function Home({ players, matches }: { players: Player[]; matches: Match[]
         <h2 className="text-2xl font-bold text-slate-900">League Standings</h2>
       </div>
 
-      <LeagueTable players={players} matches={matches} />
+      <LeagueTable players={players} />
     </div>
   );
 }

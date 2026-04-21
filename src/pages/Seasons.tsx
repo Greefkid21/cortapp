@@ -55,7 +55,7 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
         <div className="space-y-8">
             <div>
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Final Standings</h3>
-                <LeagueTable players={selectedSeason.players} matches={selectedSeason.matches} />
+                <LeagueTable players={selectedSeason.players} />
             </div>
 
             <div>
