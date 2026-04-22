@@ -5,7 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useAvailability } from '../context/AvailabilityContext';
-import { getWeekStartDate } from '../lib/utils';
+import { getWeekStartDate, formatDate } from '../lib/utils';
 import { MatchAvailabilityStatus } from '../components/MatchAvailabilityStatus';
 
 interface FixturesProps {
@@ -128,22 +128,23 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
                                         </div>
                                     </div>
                                     
-                                    {(match.time || match.venue) && (
-                                        <div className="flex items-center gap-3 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                                            {match.time && (
-                                                <div className="flex items-center gap-1 text-slate-600 font-semibold">
-                                                    <Calendar className="w-3 h-3" />
-                                                    <span>{match.time}</span>
-                                                </div>
-                                            )}
-                                            {match.venue && (
-                                                <div className="flex items-center gap-1 text-primary font-semibold">
-                                                    <HelpCircle className="w-3 h-3" />
-                                                    <span>{match.venue}</span>
-                                                </div>
-                                            )}
+                                    <div className="flex items-center gap-3 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                                        <div className="flex items-center gap-1 text-slate-500 font-bold">
+                                            <Calendar className="w-3 h-3" />
+                                            <span>{formatDate(match.date)}</span>
                                         </div>
-                                    )}
+                                        {match.time && (
+                                            <div className="flex items-center gap-1 text-slate-700 font-bold border-l border-slate-200 pl-3 ml-1">
+                                                <span>{match.time}</span>
+                                            </div>
+                                        )}
+                                        {match.venue && (
+                                            <div className="flex items-center gap-1 text-primary font-bold border-l border-slate-200 pl-3 ml-1">
+                                                <HelpCircle className="w-3 h-3" />
+                                                <span>{match.venue}</span>
+                                            </div>
+                                        )}
+                                    </div>
 
                                     <div className="flex items-center gap-3 ml-auto">
                                     {(isAdmin) && (
