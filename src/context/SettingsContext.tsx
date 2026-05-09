@@ -65,19 +65,20 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) return;
 
     try {
-      // Optimistic update
-      setSettings(prev => ({ ...prev, ...newSettings }));
-
+      // Use upsert instead of update to handle case where record doesn't exist
       const { error } = await supabase
         .from('settings')
-        .update(newSettings)
-        .eq('id', settings.id);
+        .upsert({
+          id: 0, // Always use ID 0 for the single settings row
+          ...newSettings
+        });
 
       if (error) throw error;
+
+      // Update local state after successful DB update
+      setSettings(prev => ({ ...prev, ...newSettings }));
     } catch (e) {
       console.error('Error updating settings:', e);
-      // Revert on error (could be improved)
-      fetchSettings();
       throw e;
     }
   };
