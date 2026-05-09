@@ -224,7 +224,7 @@ export function Settings() {
                   )}
                 </div>
               </div>
-              <p className="text-xs text-slate-500">Square images with transparent backgrounds work best.</p>
+              <p className="text-xs text-slate-500">Your logo will be displayed alongside the league name in the navigation bar.</p>
             </div>
 
             <div className="space-y-2">
