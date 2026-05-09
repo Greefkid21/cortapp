@@ -18,6 +18,8 @@ import { Chat } from './pages/Chat';
 import { AddMatch } from './pages/AddMatch';
 import { PlayerProfile } from './pages/PlayerProfile';
 import { Rules } from './pages/Rules';
+import { Competitions } from './pages/Competitions';
+import { CompetitionDetail } from './pages/CompetitionDetail';
 import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
@@ -480,6 +482,8 @@ function MainApp() {
 
         {/* Protected Routes */}
         <Route index element={<RequireAuth><Home players={players} matches={matches} /></RequireAuth>} />
+        <Route path="competitions" element={<RequireAuth><Competitions players={players} /></RequireAuth>} />
+        <Route path="competitions/:id" element={<RequireAuth><CompetitionDetail players={players} /></RequireAuth>} />
         <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
         <Route path="rules" element={<RequireAuth><Rules /></RequireAuth>} />

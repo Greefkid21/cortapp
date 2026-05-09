@@ -99,3 +99,39 @@ export interface Rule {
   created_at?: string;
   updated_at?: string;
 }
+
+export type CompetitionType = 'americano' | 'mexicano';
+
+export interface Competition {
+  id: string;
+  name: string;
+  type: CompetitionType;
+  date: string;
+  status: 'open' | 'completed';
+  max_points: number; // e.g. 24 or 32 points total per match
+  players: string[]; // participant IDs
+  created_at?: string;
+}
+
+export interface CompetitionMatch {
+  id: string;
+  competition_id: string;
+  round: number;
+  court?: string;
+  team1: string[]; // [player1Id, player2Id]
+  team2: string[]; // [player3Id, player4Id]
+  score1: number;
+  score2: number;
+  status: 'completed' | 'pending';
+  created_at?: string;
+}
+
+export interface CompetitionStandings {
+  playerId: string;
+  playerName: string;
+  matchesPlayed: number;
+  points: number;
+  gamesWon: number;
+  gamesLost: number;
+  gameDiff: number;
+}
