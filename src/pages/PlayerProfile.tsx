@@ -44,7 +44,12 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
         .from('avatars')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        if (uploadError.message.includes('Bucket not found')) {
+          throw new Error('Storage bucket "avatars" not found. Please ask an admin to create a public bucket named "avatars" in Supabase Storage.');
+        }
+        throw uploadError;
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')

@@ -74,7 +74,12 @@ export function Settings() {
         .from('avatars')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        if (uploadError.message.includes('Bucket not found')) {
+            throw new Error('Storage bucket "avatars" not found. Please go to Supabase -> Storage and create a public bucket named "avatars".');
+        }
+        throw uploadError;
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
