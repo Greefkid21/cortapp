@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Player } from '../types';
 import { cn } from '../lib/utils';
 import { Medal } from 'lucide-react';
@@ -8,14 +9,37 @@ interface LeagueTableProps {
 }
 
 export function LeagueTable({ players }: LeagueTableProps) {
+  const [selectedDivision, setSelectedDivision] = useState<number>(1);
+  
+  // Filter players by division
+  const divisionPlayers = players.filter(p => (p.division || 1) === selectedDivision);
+
   // Sort players by points (desc), then net sets/games if needed
-  const sortedPlayers = [...players].sort((a, b) => {
+  const sortedPlayers = [...divisionPlayers].sort((a, b) => {
     if (b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
     return (b.stats.gameDifference || 0) - (a.stats.gameDifference || 0);
   });
 
   return (
     <div className="space-y-4">
+      {/* Division Selector */}
+      <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
+        {[1, 2].map(div => (
+          <button
+            key={div}
+            onClick={() => setSelectedDivision(div)}
+            className={cn(
+              "px-6 py-2 rounded-lg text-sm font-bold transition-all",
+              selectedDivision === div 
+                ? "bg-white text-primary shadow-sm" 
+                : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            Division {div}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">

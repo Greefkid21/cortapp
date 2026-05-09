@@ -1,20 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSeason } from '../context/SeasonContext';
 import { useAuth } from '../context/AuthContext';
-import { Player, Match, SeasonArchive } from '../types';
+import { Player, Match, SeasonArchive, Season } from '../types';
 import { Archive, CalendarDays, Trash2, ChevronRight, ArrowLeft } from 'lucide-react';
 import { LeagueTable } from '../components/LeagueTable';
 import { MatchHistory } from '../components/MatchHistory';
 
 export function Seasons({ players, matches, onReset }: { players: Player[]; matches: Match[]; onReset: () => void }) {
-  const { currentSeasonName, currentSeasonStart, archives, archiveAndStart, deleteArchive } = useSeason();
+  const { currentSeasonName, currentSeasonStart, archives, archiveAndStart, deleteArchive, createDraftSeason, getDraftSeason, updateDraftSeason } = useSeason();
   const { isAdmin } = useAuth();
   const [newSeasonName, setNewSeasonName] = useState('');
   const [selectedSeason, setSelectedSeason] = useState<SeasonArchive | null>(null);
+  const [draftSeason, setDraftSeason] = useState<Season | null>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
+
+  useEffect(() => {
+    if (isAdmin) {
+      getDraftSeason().then(setDraftSeason);
+    }
+  }, [isAdmin]);
 
   if (!isAdmin) {
     return <div className="p-8 text-center">You do not have permission to view this page.</div>;
   }
+
+  const handleStartPlanning = async () => {
+    setIsPreparing(true);
+    const id = await createDraftSeason(`Next Season (Draft)`);
+    if (id) {
+        const draft = await getDraftSeason();
+        setDraftSeason(draft);
+    }
+    setIsPreparing(false);
+  };
+
+  const handleSaveDraft = async () => {
+    if (draftSeason) {
+        await updateDraftSeason(draftSeason.id, draftSeason);
+        alert('Draft saved!');
+    }
+  };
 
   const handleArchiveAndStart = () => {
     const name = newSeasonName.trim() || `Season ${archives.length + 2}`;
@@ -71,6 +96,55 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
       <div className="flex items-center gap-2">
         <CalendarDays className="w-5 h-5 text-primary" />
         <h2 className="text-2xl font-bold text-slate-900">Seasons</h2>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Plan Next Season</h3>
+            <p className="text-sm text-slate-500">Prepare divisions and fixtures for the upcoming season without affecting current data.</p>
+          </div>
+          {!draftSeason && (
+            <button
+              onClick={handleStartPlanning}
+              disabled={isPreparing}
+              className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              Start Planning
+            </button>
+          )}
+        </div>
+
+        {draftSeason && (
+          <div className="pt-4 border-t border-slate-100 space-y-4">
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={draftSeason.name}
+                onChange={(e) => setDraftSeason({ ...draftSeason, name: e.target.value })}
+                placeholder="Season Name (e.g. Season 2)"
+                className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+              />
+              <button
+                onClick={handleSaveDraft}
+                className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 transition-colors"
+              >
+                Save Draft
+              </button>
+            </div>
+            
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                <p className="text-sm text-amber-800 font-medium">
+                    <strong>Divisions & Fixtures:</strong> To set up next season:
+                </p>
+                <ol className="text-xs text-amber-700 mt-2 list-decimal ml-4 space-y-1">
+                    <li>Go to the <strong>Players</strong> page and assign everyone to Division 1 or 2.</li>
+                    <li>Come back here when the current season ends to "Archive & Start New".</li>
+                    <li>The new season will automatically respect the divisions you've set!</li>
+                </ol>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-3">

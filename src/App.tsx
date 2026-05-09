@@ -123,6 +123,7 @@ function MainApp() {
             name: p.name,
             avatar: p.avatar,
             seed: p.seed,
+            division: p.division || 1,
             stats: {
               matchesPlayed: p.played || 0,
               wins: p.wins || 0,
@@ -429,9 +430,9 @@ function MainApp() {
     }
   };
 
-  const handleUpdatePlayer = async (id: string, name: string, avatar?: string, seed?: number) => {
+  const handleUpdatePlayer = async (id: string, name: string, avatar?: string, seed?: number, division?: number) => {
     if (supabase) {
-        const { error } = await supabase.from('players').update({ name, avatar, seed }).eq('id', id);
+        const { error } = await supabase.from('players').update({ name, avatar, seed, division }).eq('id', id);
         
         if (error) {
             console.error('Error updating player:', error);
@@ -439,9 +440,9 @@ function MainApp() {
             return;
         }
 
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division } : p));
     } else {
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division } : p));
     }
   };
 

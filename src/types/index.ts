@@ -3,6 +3,7 @@ export interface Player {
   name: string;
   seed?: number; // 1 = strongest, higher = weaker
   avatar?: string;
+  division?: number; // 1 for Division 1, 2 for Division 2, etc.
   stats: {
     matchesPlayed: number;
     wins: number;
@@ -14,6 +15,19 @@ export interface Player {
     gamesWon: number;
     gamesLost: number;
     gameDifference: number; // Games Won - Games Lost
+  };
+}
+
+export interface Season {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date?: string;
+  is_active: boolean;
+  is_draft?: boolean;
+  final_standings?: {
+    players: Player[];
+    matches: Match[];
   };
 }
 

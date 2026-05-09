@@ -90,6 +90,50 @@ export function generateStrictSchedule(
   startDate: string, // Unused logic-wise but kept for signature compatibility if needed
   maxTimeMs: number = 10000 // Increased default time to 10s for deep optimization
 ): StrictModeResult {
+  // If players have divisions, we generate schedules per division and combine them
+  const divisions = Array.from(new Set(players.map(p => p.division || 1))).sort();
+  
+  if (divisions.length > 1) {
+    const allFixtures: Match[][] = [];
+    const allStats: any[] = [];
+    let allOk = true;
+    let combinedExplanation = "";
+
+    for (const div of divisions) {
+      const divPlayers = players.filter(p => (p.division || 1) === div);
+      if (divPlayers.length === 0) continue;
+      
+      const result = generateStrictSchedule(divPlayers, startDate, maxTimeMs / divisions.length);
+      if (!result.ok) {
+        allOk = false;
+        return {
+          ok: false,
+          error: {
+            code: result.error?.code || "DIVISION_GEN_FAILED",
+            message: `Division ${div} failed: ${result.error?.message}`
+          }
+        };
+      }
+      
+      // Combine fixtures by week
+      result.fixtures?.forEach((weekMatches, weekIdx) => {
+        if (!allFixtures[weekIdx]) allFixtures[weekIdx] = [];
+        allFixtures[weekIdx].push(...weekMatches);
+      });
+      
+      if (result.stats) allStats.push(result.stats);
+      combinedExplanation += `Division ${div}: ${result.explanation}\n`;
+    }
+
+    return {
+      ok: allOk,
+      fixtures: allFixtures,
+      explanation: combinedExplanation,
+      // Note: stats are simplified for multi-division for now
+      stats: allStats[0] 
+    };
+  }
+
   const N = players.length;
   const startTime = Date.now();
 

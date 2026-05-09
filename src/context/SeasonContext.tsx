@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { SeasonArchive, Player, Match } from '../types';
+import { SeasonArchive, Player, Match, Season } from '../types';
 import { supabase } from '../lib/supabase';
 
 interface SeasonContextType {
@@ -9,6 +9,9 @@ interface SeasonContextType {
   archives: SeasonArchive[];
   archiveAndStart: (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[]) => Promise<void>;
   deleteArchive: (id: string) => Promise<void>;
+  createDraftSeason: (name: string) => Promise<string | null>;
+  getDraftSeason: () => Promise<Season | null>;
+  updateDraftSeason: (id: string, data: Partial<Season>) => Promise<void>;
   loading: boolean;
 }
 
@@ -191,6 +194,72 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     setArchives(prev => prev.filter(a => a.id !== id));
   };
 
+  const createDraftSeason = async (name: string): Promise<string | null> => {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('seasons')
+        .insert([{
+          name,
+          start_date: new Date().toISOString().split('T')[0],
+          is_active: false,
+          is_draft: true
+        }])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creating draft season:', error);
+        return null;
+      }
+      return data.id;
+    }
+    return 'draft-id';
+  };
+
+  const getDraftSeason = async (): Promise<Season | null> => {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('seasons')
+        .select('*')
+        .eq('is_draft', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching draft season:', error);
+        return null;
+      }
+      if (data) {
+        return {
+          id: data.id,
+          name: data.name,
+          start_date: data.start_date,
+          is_active: data.is_active,
+          is_draft: data.is_draft,
+          final_standings: data.final_standings
+        };
+      }
+    }
+    return null;
+  };
+
+  const updateDraftSeason = async (id: string, data: Partial<Season>) => {
+    if (supabase) {
+      const { error } = await supabase
+        .from('seasons')
+        .update({
+          name: data.name,
+          final_standings: data.final_standings
+        })
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Error updating draft season:', error);
+      }
+    }
+  };
+
   const value = useMemo(() => ({
     currentSeasonName,
     currentSeasonStart,
@@ -198,6 +267,9 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     archives,
     archiveAndStart,
     deleteArchive,
+    createDraftSeason,
+    getDraftSeason,
+    updateDraftSeason,
     loading
   }), [currentSeasonName, currentSeasonStart, currentSeasonId, archives, loading]);
 
