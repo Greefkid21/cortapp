@@ -43,15 +43,17 @@ function generateMexicanoRound(
     rankedPlayerIds = [...competition.players].sort(() => Math.random() - 0.5);
   }
 
-  const numCourts = Math.floor(rankedPlayerIds.length / 4);
+  // RESPECT COURT LIMIT
+  const numCourts = competition.num_courts || Math.floor(rankedPlayerIds.length / 4);
+  const playersToPair = rankedPlayerIds.slice(0, numCourts * 4);
 
   for (let i = 0; i < numCourts; i++) {
     const offset = i * 4;
     // Pairing: 1 & 4 vs 2 & 3 (Standard Mexicano power pairing)
-    const p1 = rankedPlayerIds[offset];
-    const p2 = rankedPlayerIds[offset + 1];
-    const p3 = rankedPlayerIds[offset + 2];
-    const p4 = rankedPlayerIds[offset + 3];
+    const p1 = playersToPair[offset];
+    const p2 = playersToPair[offset + 1];
+    const p3 = playersToPair[offset + 2];
+    const p4 = playersToPair[offset + 3];
 
     if (p1 && p2 && p3 && p4) {
       matches.push({
@@ -73,8 +75,7 @@ function generateMexicanoRound(
 /**
  * Americano Logic:
  * Tries to ensure players play with different partners and against different opponents.
- * For simplicity in a dynamic app, we use a randomized approach that prioritizes 
- * players who haven't played together recently if possible, or a simple rotation.
+ * Handles waiting teams by rotating players who have played the most matches out.
  */
 function generateAmericanoRound(
   competition: Competition,
@@ -84,9 +85,18 @@ function generateAmericanoRound(
 ): { round: number; matches: Partial<CompetitionMatch>[] } {
   const matches: Partial<CompetitionMatch>[] = [];
   
+  // Get counts of matches played per player
+  const playerMatchCounts: Record<string, number> = {};
+  allPlayerIds.forEach(id => playerMatchCounts[id] = 0);
+  
   // Get counts of how many times each pair has played together
   const partnerCounts: Record<string, number> = {};
+
   existingMatches.forEach(m => {
+    [...m.team1, ...m.team2].forEach(pid => {
+      playerMatchCounts[pid] = (playerMatchCounts[pid] || 0) + 1;
+    });
+
     const pairs = [
       m.team1.sort().join(','),
       m.team2.sort().join(',')
@@ -96,15 +106,23 @@ function generateAmericanoRound(
     });
   });
 
-  // Simple Americano rotation: 
-  // We shuffle and try to find pairings that haven't happened yet.
-  // This is a greedy approximation.
-  let availablePlayers = [...allPlayerIds].sort(() => Math.random() - 0.5);
-  const numCourts = Math.floor(availablePlayers.length / 4);
+  // RESPECT COURT LIMIT: Pick players with the fewest matches played
+  const sortedByPlayCount = [...allPlayerIds].sort((a, b) => {
+    if (playerMatchCounts[a] !== playerMatchCounts[b]) {
+        return playerMatchCounts[a] - playerMatchCounts[b];
+    }
+    return Math.random() - 0.5; // Randomize if counts are equal
+  });
+
+  const numCourts = competition.num_courts || Math.floor(allPlayerIds.length / 4);
+  let availablePlayers = sortedByPlayCount.slice(0, numCourts * 4);
+  // Re-shuffle the picked players to allow for different pairings
+  availablePlayers = availablePlayers.sort(() => Math.random() - 0.5);
 
   for (let i = 0; i < numCourts; i++) {
     // Pick 4 players
     const courtPlayers = availablePlayers.splice(0, 4);
+    if (courtPlayers.length < 4) break;
     
     // Of these 4, find the best pairing (least played together)
     const possiblePairings = [

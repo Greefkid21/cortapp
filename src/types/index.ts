@@ -109,6 +109,7 @@ export interface Competition {
   date: string;
   status: 'open' | 'completed';
   max_points: number; // e.g. 24 or 32 points total per match
+  num_courts: number; // Number of available courts
   players: string[]; // participant IDs
   created_at?: string;
 }

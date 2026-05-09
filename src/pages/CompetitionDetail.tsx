@@ -110,6 +110,17 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
     });
   }, [competition, matches, players]);
 
+  const waitingPlayers = useMemo(() => {
+    if (!competition) return [];
+    const pendingMatches = matches.filter(m => m.status === 'pending');
+    if (pendingMatches.length === 0) return [];
+    
+    const playingIds = new Set(pendingMatches.flatMap(m => [...m.team1, ...m.team2]));
+    return competition.players
+      .filter(pid => !playingIds.has(pid))
+      .map(pid => players.find(p => p.id === pid)?.name || 'Unknown');
+  }, [competition, matches, players]);
+
   const handleAddMatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (team1.length !== 2 || team2.length !== 2) {
@@ -313,6 +324,22 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
           )}
         </div>
       </div>
+
+      {/* Waiting Players Info */}
+      {waitingPlayers.length > 0 && (
+        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black text-amber-600 uppercase tracking-widest leading-none mb-1">Waiting this round</div>
+              <div className="text-sm font-bold text-amber-900">{waitingPlayers.join(', ')}</div>
+            </div>
+          </div>
+          <span className="bg-white/50 px-2 py-1 rounded-lg text-[10px] font-black text-amber-600 uppercase border border-amber-200/50">Next Up</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Standings */}

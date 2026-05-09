@@ -17,6 +17,7 @@ export function Competitions({ players }: { players: Player[] }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<'americano' | 'mexicano'>('americano');
   const [maxPoints, setMaxPoints] = useState(24);
+  const [numCourts, setNumCourts] = useState(2);
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function Competitions({ players }: { players: Player[] }) {
           name,
           type,
           max_points: maxPoints,
+          num_courts: numCourts,
           players: selectedPlayers,
           date: new Date().toISOString().split('T')[0],
           status: 'open'
@@ -153,6 +155,10 @@ export function Competitions({ players }: { players: Player[] }) {
                     <Users className="w-3.5 h-3.5" />
                     {comp.players.length} Players
                   </div>
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <Trophy className="w-3.5 h-3.5" />
+                    {comp.num_courts} {comp.num_courts === 1 ? 'Court' : 'Courts'}
+                  </div>
                 </div>
               </div>
               <ChevronRight className="w-6 h-6 text-slate-300 group-hover:text-primary transition-colors group-hover:translate-x-1" />
@@ -205,6 +211,28 @@ export function Competitions({ players }: { players: Player[] }) {
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary outline-none font-bold"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Available Courts</label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4].map(num => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setNumCourts(num)}
+                      className={cn(
+                        "flex-1 py-3 rounded-xl font-bold transition-all border",
+                        numCourts === num 
+                          ? "bg-slate-800 text-white border-slate-800" 
+                          : "bg-white text-slate-600 border-slate-100 hover:border-slate-300"
+                      )}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-500 italic">This will limit how many matches are generated each round.</p>
               </div>
 
               <div className="space-y-3">
