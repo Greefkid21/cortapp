@@ -11,7 +11,7 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
       <img 
         src={settings.logo_url} 
         alt="Logo" 
-        className={cn("w-auto object-contain", props.className)}
+        className={cn("w-auto object-contain max-h-[40px]", props.className)}
         style={{ height: `${height}px` }}
       />
     );

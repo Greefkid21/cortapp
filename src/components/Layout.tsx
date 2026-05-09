@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
@@ -54,13 +54,20 @@ export function Layout() {
   
   const isMoreActive = hiddenItems.some(item => item.path === location.pathname);
 
+  // Update page title dynamically
+  useEffect(() => {
+    if (settings?.league_name) {
+      document.title = `${settings.league_name} - Padel League`;
+    }
+  }, [settings?.league_name]);
+
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-900 pb-20">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 safe-top">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Logo className="h-8 w-auto text-slate-900" />
-            <h1 className="text-xl font-black tracking-tight text-slate-900">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Logo className="h-8 sm:h-9 w-auto text-slate-900 flex-shrink-0" />
+            <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 truncate">
               {settings?.league_name || 'cørtapp'}
             </h1>
           </div>
