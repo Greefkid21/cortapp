@@ -45,13 +45,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase
           .from('settings')
           .select('*')
-          .single();
+          .order('id', { ascending: true })
+          .limit(1);
         
-        if (data) {
-          setSettings(data);
+        if (data && data.length > 0) {
+          setSettings(data[0]);
         } else if (error) {
-            // If table doesn't exist or is empty, we might get an error. 
-            // We just stick to defaults.
             console.error('Error fetching settings:', error);
         }
       } catch (e) {

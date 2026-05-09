@@ -60,8 +60,9 @@ export function Settings() {
     try {
       await updateSettings(formData);
       setMessage({ type: 'success', text: 'Settings updated successfully' });
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update settings' });
+    } catch (error: any) {
+      console.error('Failed to update settings:', error);
+      setMessage({ type: 'error', text: `Failed to update settings: ${error.message || 'Unknown error'}` });
     } finally {
       setSaving(false);
     }
