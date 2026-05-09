@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 export interface LeagueSettings {
   id: number;
   league_name: string;
+  logo_url?: string;
   points_win: number;
   points_draw: number;
   points_loss: number;

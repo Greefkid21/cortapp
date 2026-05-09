@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Settings as SettingsIcon, Save, AlertCircle, Lock, Mail } from 'lucide-react';
+import { Settings as SettingsIcon, Save, AlertCircle, Lock, Mail, Upload, Camera, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function Settings() {
@@ -14,9 +14,11 @@ export function Settings() {
     league_name: '',
     points_win: 2,
     points_draw: 1,
-    points_loss: 0
+    points_loss: 0,
+    logo_url: ''
   });
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
   const [newEmail, setNewEmail] = useState('');
@@ -29,7 +31,8 @@ export function Settings() {
         league_name: settings.league_name,
         points_win: settings.points_win,
         points_draw: settings.points_draw,
-        points_loss: settings.points_loss
+        points_loss: settings.points_loss,
+        logo_url: settings.logo_url || ''
       });
     }
   }, [settings]);
@@ -51,6 +54,41 @@ export function Settings() {
       setMessage({ type: 'error', text: 'Failed to update settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) return;
+    
+    try {
+      setUploadingLogo(true);
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `league-logo-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+      
+      if (!supabase) throw new Error('Supabase not configured');
+
+      // Upload to public bucket (same as avatars)
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // Update local form state (will be saved when clicking Save Settings)
+      setFormData(prev => ({ ...prev, logo_url: publicUrl }));
+      
+      setMessage({ type: 'success', text: 'Logo uploaded! Don\'t forget to Save Settings below.' });
+    } catch (error: any) {
+      console.error('Error uploading logo:', error);
+      setMessage({ type: 'error', text: 'Error uploading logo: ' + error.message });
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -147,6 +185,48 @@ export function Settings() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
             <h3 className="font-bold text-slate-700 border-b border-slate-100 pb-2">General</h3>
+            
+            {/* Logo Upload Section */}
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-slate-700">League Logo</label>
+              <div className="flex items-center gap-6">
+                <div className="w-20 h-20 rounded-xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden">
+                  {formData.logo_url ? (
+                    <img src={formData.logo_url} alt="League Logo" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    <Upload className="w-8 h-8 text-slate-300" />
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="cursor-pointer bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors flex items-center gap-2 w-fit">
+                    {uploadingLogo ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Camera className="w-4 h-4" />
+                    )}
+                    {formData.logo_url ? 'Change Logo' : 'Upload Logo'}
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleLogoUpload}
+                      disabled={uploadingLogo}
+                    />
+                  </label>
+                  {formData.logo_url && (
+                    <button 
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, logo_url: '' }))}
+                      className="text-xs text-red-500 font-bold hover:underline w-fit"
+                    >
+                      Remove Logo
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">Square images with transparent backgrounds work best.</p>
+            </div>
+
             <div className="space-y-2">
               <label className="block text-sm font-bold text-slate-700">League Name</label>
               <input

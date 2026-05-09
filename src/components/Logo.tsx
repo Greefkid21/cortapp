@@ -1,6 +1,24 @@
 import { SVGProps } from 'react';
+import { useSettings } from '../context/SettingsContext';
 
 export function Logo(props: SVGProps<SVGSVGElement>) {
+  const { settings } = useSettings();
+
+  if (settings?.logo_url) {
+    return (
+      <img 
+        src={settings.logo_url} 
+        alt={settings.league_name} 
+        className={props.className}
+        style={{ 
+            width: props.width || '1.5rem', 
+            height: props.height || '1.5rem',
+            objectFit: 'contain'
+        }}
+      />
+    );
+  }
+
   return (
     <svg 
       viewBox="0 0 24 24" 
