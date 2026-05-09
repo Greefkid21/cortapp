@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Player, Competition, CompetitionMatch, CompetitionStandings } from '../types';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, Loader2, Plus, Calendar, Medal, Users, Trophy, Trash2, Save, X, History as HistoryIcon, Sparkles } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Calendar, Medal, Users, Trophy, Trash2, Save, X, History as HistoryIcon, Sparkles, Pencil } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { generateNextCompetitionRound } from '../lib/competitionScheduler';
 
@@ -259,8 +259,8 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
         <ArrowLeft className="w-4 h-4 mr-1" /> Back to Competitions
       </Link>
 
-      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className={cn(
@@ -285,28 +285,29 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
               </div>
             </div>
           </div>
+          
           {isAdmin && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={deleteTournament}
-                className="p-2 text-red-300 hover:text-red-500 transition-colors"
-                title="Delete Tournament"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleGenerateRound}
                 disabled={generating}
-                className="bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-lg shadow-slate-200 font-black text-sm flex items-center gap-2"
+                className="flex-1 sm:flex-none bg-slate-800 text-white px-4 py-2.5 rounded-xl hover:bg-slate-900 transition-colors shadow-lg shadow-slate-200 font-black text-xs flex items-center justify-center gap-2"
               >
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-400" />}
                 Generate Round
               </button>
               <button
                 onClick={() => setShowAddMatch(true)}
-                className="bg-primary text-white px-4 py-2 rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-primary/20 font-black text-sm flex items-center gap-2"
+                className="flex-1 sm:flex-none bg-primary text-white px-4 py-2.5 rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-primary/20 font-black text-xs flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" /> Add Match
+              </button>
+              <button
+                onClick={deleteTournament}
+                className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-100 sm:border-transparent"
+                title="Delete Tournament"
+              >
+                <Trash2 className="w-5 h-5" />
               </button>
             </div>
           )}
@@ -389,14 +390,30 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
                         <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded ml-1 animate-pulse">Pending</span>
                       )}
                     </div>
-                    {isAdmin && (
-                      <button 
-                        onClick={() => deleteMatch(match.id)}
-                        className="text-red-300 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {isAdmin && match.status === 'completed' && (
+                        <button
+                          onClick={() => {
+                            setRecordingMatchId(match.id);
+                            setRecScore1(match.score1);
+                            setRecScore2(match.score2);
+                          }}
+                          className="p-1 text-slate-400 hover:text-primary transition-colors"
+                          title="Edit Result"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button 
+                          onClick={() => deleteMatch(match.id)}
+                          className="p-1 text-red-300 hover:text-red-500 transition-colors"
+                          title="Delete Result"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {recordingMatchId === match.id ? (
