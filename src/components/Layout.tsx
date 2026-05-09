@@ -58,10 +58,8 @@ export function Layout() {
     <div className="min-h-screen bg-slate-100 font-sans text-slate-900 pb-20">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 safe-top">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 flex items-center justify-center">
-              <Logo className="w-8 h-8 text-slate-900" />
-            </div>
+          <div className="flex items-center gap-3">
+            <Logo className="h-8 w-auto text-slate-900" />
             <h1 className="text-xl font-black tracking-tight text-slate-900">
               {settings?.league_name || 'cørtapp'}
             </h1>
