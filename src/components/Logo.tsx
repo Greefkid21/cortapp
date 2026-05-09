@@ -6,11 +6,13 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
   const { settings } = useSettings();
 
   if (settings?.logo_url) {
+    const height = settings.logo_height || 32;
     return (
       <img 
         src={settings.logo_url} 
         alt="Logo" 
-        className={cn("h-8 w-auto object-contain", props.className)}
+        className={cn("w-auto object-contain", props.className)}
+        style={{ height: `${height}px` }}
       />
     );
   }

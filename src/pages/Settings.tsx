@@ -15,7 +15,8 @@ export function Settings() {
     points_win: 2,
     points_draw: 1,
     points_loss: 0,
-    logo_url: ''
+    logo_url: '',
+    logo_height: 32
   });
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -32,7 +33,8 @@ export function Settings() {
         points_win: settings.points_win,
         points_draw: settings.points_draw,
         points_loss: settings.points_loss,
-        logo_url: settings.logo_url || ''
+        logo_url: settings.logo_url || '',
+        logo_height: settings.logo_height || 32
       });
     }
   }, [settings]);
@@ -238,6 +240,16 @@ export function Settings() {
                 type="text"
                 value={formData.league_name}
                 onChange={(e) => setFormData({ ...formData, league_name: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-slate-700">Logo Height (px)</label>
+              <input
+                type="number"
+                value={formData.logo_height}
+                onChange={(e) => setFormData({ ...formData, logo_height: parseInt(e.target.value) || 0 })}
                 className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
               />
             </div>

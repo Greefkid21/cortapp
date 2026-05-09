@@ -5,6 +5,7 @@ export interface LeagueSettings {
   id: number;
   league_name: string;
   logo_url?: string;
+  logo_height?: number; // Height in pixels
   points_win: number;
   points_draw: number;
   points_loss: number;
