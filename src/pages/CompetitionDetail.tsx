@@ -3,8 +3,9 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Player, Competition, CompetitionMatch, CompetitionStandings } from '../types';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, Loader2, Plus, Calendar, Medal, Users, Trophy, Trash2, Save, X, History as HistoryIcon } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Calendar, Medal, Users, Trophy, Trash2, Save, X, History as HistoryIcon, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { generateNextCompetitionRound } from '../lib/competitionScheduler';
 
 export function CompetitionDetail({ players }: { players: Player[] }) {
   const { id } = useParams();
@@ -15,6 +16,12 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
   const [loading, setLoading] = useState(true);
   const [showAddMatch, setShowAddMatch] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  // Score Recording State for pending matches
+  const [recordingMatchId, setRecordingMatchId] = useState<string | null>(null);
+  const [recScore1, setRecScore1] = useState(0);
+  const [recScore2, setRecScore2] = useState(0);
 
   // Add Match Form State
   const [round, setRound] = useState(1);
@@ -142,6 +149,66 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
     }
   };
 
+  const handleGenerateRound = async () => {
+    if (!competition || !supabase) return;
+    
+    // Check if there are any pending matches from previous round
+    const pendingMatches = matches.filter(m => m.status === 'pending');
+    if (pendingMatches.length > 0) {
+      alert('Please record results for all matches in the current round before generating a new one.');
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const { matches: nextMatches } = generateNextCompetitionRound(
+        competition,
+        players,
+        matches,
+        standings
+      );
+
+      const { data, error } = await supabase
+        .from('competition_matches')
+        .insert(nextMatches)
+        .select();
+
+      if (error) throw error;
+      setMatches([...(data || []), ...matches]);
+    } catch (error: any) {
+      alert('Error generating round: ' + error.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleRecordScore = async (matchId: string) => {
+    if (!supabase) return;
+    
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from('competition_matches')
+        .update({
+          score1: recScore1,
+          score2: recScore2,
+          status: 'completed'
+        })
+        .eq('id', matchId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setMatches(matches.map(m => m.id === matchId ? data : m));
+      setRecordingMatchId(null);
+    } catch (error: any) {
+      alert('Error saving score: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const deleteMatch = async (matchId: string) => {
     if (!confirm('Are you sure you want to delete this match result?')) return;
     try {
@@ -228,6 +295,14 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
                 <Trash2 className="w-5 h-5" />
               </button>
               <button
+                onClick={handleGenerateRound}
+                disabled={generating}
+                className="bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-lg shadow-slate-200 font-black text-sm flex items-center gap-2"
+              >
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-400" />}
+                Generate Round
+              </button>
+              <button
                 onClick={() => setShowAddMatch(true)}
                 className="bg-primary text-white px-4 py-2 rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-primary/20 font-black text-sm flex items-center gap-2"
               >
@@ -301,9 +376,19 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
               <p className="text-slate-400 text-sm font-bold text-center py-8">No results recorded yet.</p>
             ) : (
               matches.map(match => (
-                <div key={match.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative group">
+                <div key={match.id} className={cn(
+                  "bg-white p-4 rounded-2xl border shadow-sm space-y-3 relative group",
+                  match.status === 'pending' ? "border-amber-200 bg-amber-50/20" : "border-slate-100"
+                )}>
                   <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    <span>Round {match.round}</span>
+                    <div className="flex items-center gap-2">
+                      <span>Round {match.round}</span>
+                      {match.court && <span className="text-slate-300">•</span>}
+                      {match.court && <span className="text-primary">{match.court}</span>}
+                      {match.status === 'pending' && (
+                        <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded ml-1 animate-pulse">Pending</span>
+                      )}
+                    </div>
                     {isAdmin && (
                       <button 
                         onClick={() => deleteMatch(match.id)}
@@ -313,21 +398,87 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-5 items-center gap-2">
-                    <div className="col-span-2 space-y-0.5">
-                      <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team1[0])}</div>
-                      <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team1[1])}</div>
+
+                  {recordingMatchId === match.id ? (
+                    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="grid grid-cols-5 items-center gap-4">
+                        <div className="col-span-2 space-y-1">
+                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Team 1</div>
+                           <input
+                            type="number"
+                            value={recScore1}
+                            onChange={e => setRecScore1(parseInt(e.target.value) || 0)}
+                            className="w-full p-2 bg-white border border-slate-200 rounded-lg text-center font-black text-xl outline-none focus:ring-2 focus:ring-primary"
+                            autoFocus
+                           />
+                        </div>
+                        <div className="col-span-1 flex items-center justify-center text-slate-300 pt-4">
+                          <X className="w-4 h-4" />
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Team 2</div>
+                           <input
+                            type="number"
+                            value={recScore2}
+                            onChange={e => setRecScore2(parseInt(e.target.value) || 0)}
+                            className="w-full p-2 bg-white border border-slate-200 rounded-lg text-center font-black text-xl outline-none focus:ring-2 focus:ring-primary"
+                           />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setRecordingMatchId(null)}
+                          className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold rounded-lg text-xs hover:bg-slate-200 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleRecordScore(match.id)}
+                          disabled={saving}
+                          className="flex-3 py-2 bg-primary text-white font-black rounded-lg text-xs hover:bg-teal-700 transition-colors shadow-md shadow-primary/20 flex items-center justify-center gap-2"
+                        >
+                          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                          Record Score
+                        </button>
+                      </div>
                     </div>
-                    <div className="col-span-1 flex items-center justify-center gap-1 font-black text-lg">
-                      <span className={match.score1 > match.score2 ? "text-primary" : "text-slate-400"}>{match.score1}</span>
-                      <span className="text-slate-200">-</span>
-                      <span className={match.score2 > match.score1 ? "text-primary" : "text-slate-400"}>{match.score2}</span>
+                  ) : (
+                    <div className="grid grid-cols-5 items-center gap-2">
+                      <div className="col-span-2 space-y-0.5">
+                        <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team1[0])}</div>
+                        <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team1[1])}</div>
+                      </div>
+                      <div className="col-span-1 flex items-center justify-center gap-1 font-black text-lg">
+                        {match.status === 'pending' ? (
+                          isAdmin ? (
+                            <button 
+                              onClick={() => {
+                                setRecordingMatchId(match.id);
+                                setRecScore1(0);
+                                setRecScore2(0);
+                              }}
+                              className="text-primary hover:scale-110 transition-transform p-2 bg-primary/5 rounded-full"
+                              title="Record Result"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </button>
+                          ) : (
+                            <span className="text-slate-200">vs</span>
+                          )
+                        ) : (
+                          <>
+                            <span className={match.score1 > match.score2 ? "text-primary" : "text-slate-400"}>{match.score1}</span>
+                            <span className="text-slate-200">-</span>
+                            <span className={match.score2 > match.score1 ? "text-primary" : "text-slate-400"}>{match.score2}</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="col-span-2 space-y-0.5 text-right">
+                        <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team2[0])}</div>
+                        <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team2[1])}</div>
+                      </div>
                     </div>
-                    <div className="col-span-2 space-y-0.5 text-right">
-                      <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team2[0])}</div>
-                      <div className="text-xs font-bold text-slate-900 truncate">{getPlayerName(match.team2[1])}</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               ))
             )}
