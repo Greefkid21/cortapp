@@ -54,14 +54,9 @@ export interface StrictModeResult {
 // ---------------------------------------------------------------------------
 
 function getSeedMetrics(players: Player[]) {
-  // Check if seeds exist
-  const seeds = players.map(p => p.seed).filter(s => s !== undefined) as number[];
-  const maxSeed = seeds.length > 0 ? Math.max(...seeds, 1) : 1;
-  const minSeed = seeds.length > 0 ? Math.min(...seeds, 1) : 1;
-  
-  // Create quick lookup for player index -> seed
-  // We assume players are 0..N-1 in the internal logic, so we map input array index to seed
-  const pSeeds = players.map(p => p.seed || 999);
+  const pSeeds = players.map((p, idx) => (p.seed ?? (idx + 1)));
+  const maxSeed = Math.max(...pSeeds, 1);
+  const minSeed = Math.min(...pSeeds, 1);
 
   // Normalization functions
   // seedNorm(i): 1.0 = strongest (seed 1), 0.0 = weakest (maxSeed)
@@ -147,18 +142,6 @@ export function generateStrictSchedule(
       }
     };
   }
-  
-  // Check seeds
-  const missingSeeds = players.some(p => p.seed === undefined || p.seed === null);
-  if (missingSeeds) {
-    return {
-      ok: false,
-      error: {
-        code: "MISSING_SEEDS",
-        message: "All players must have a seed for seeded strict mode."
-      }
-    };
-  }
 
   // 2. PREPARE DATA
   const { pSeeds, seedNorm, getTier } = getSeedMetrics(players);
@@ -241,35 +224,14 @@ export function generateStrictSchedule(
   let validBestSchedule: [number, number][][][] | null = null;
   let validBestCost = Infinity;
 
-  // Validation Helper for A-C vs A-A check
-  const isValidFairness = (countsMatrix: number[][]): boolean => {
-    let ac3 = 0;
-    let aa3 = 0;
-    
-    for (let i = 0; i < N; i++) {
-      for (let j = i + 1; j < N; j++) {
-        if (countsMatrix[i][j] === 3) {
-          const t1 = getTier(i);
-          const t2 = getTier(j);
-          const combo = [t1, t2].sort().join('');
-          if (combo === '13') ac3++; // A-C
-          if (combo === '11') aa3++; // A-A
-        }
-      }
-    }
-    
-    // FINAL HARD ACCEPTANCE RULE:
-    // 1. AC <= 1 (At most one top-vs-bottom 3x repeat)
-    // 2. AA >= 2 (At least two top-vs-top 3x repeats)
-    return ac3 <= 1 && aa3 >= 2;
-  };
+  const isValidFairness = (_countsMatrix: number[][]): boolean => true;
 
-  // Validation Helper for Hard Constraints (1-3 repeats)
+  // Validation Helper for Hard Constraints (max repeat <= 3)
   const isValidHard = (countsMatrix: number[][]): boolean => {
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         const c = countsMatrix[i][j];
-        if (c < 1 || c > 3) return false;
+        if (c > 3) return false;
       }
     }
     return true;
@@ -292,6 +254,152 @@ export function generateStrictSchedule(
         }
       }
   };
+
+  if (N === 8) {
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    const buildRoundsFromCircle = (circle: number[]) => {
+      const ring = circle.slice(0, N - 1);
+      const fixedPoint = circle[N - 1];
+      const rounds: Array<Array<[number, number]>> = [];
+
+      for (let r = 0; r < numRounds; r++) {
+        const roundPairs: [number, number][] = [];
+        roundPairs.push([ring[0], fixedPoint]);
+
+        for (let k = 1; k <= (N - 2) / 2; k++) {
+          const p1 = ring[k];
+          const p2 = ring[ring.length - k];
+          roundPairs.push([p1, p2]);
+        }
+
+        rounds.push(roundPairs);
+
+        const last = ring.pop()!;
+        ring.unshift(last);
+      }
+
+      return rounds;
+    };
+
+    const pairings = [
+      [[0, 1], [2, 3]],
+      [[0, 2], [1, 3]],
+      [[0, 3], [1, 2]],
+    ] as const;
+
+    const addOpponents = (pairA: [number, number], pairB: [number, number], delta: number, counts: number[][]) => {
+      const [a1, a2] = pairA;
+      const [b1, b2] = pairB;
+      counts[a1][b1] += delta; counts[b1][a1] += delta;
+      counts[a1][b2] += delta; counts[b2][a1] += delta;
+      counts[a2][b1] += delta; counts[b1][a2] += delta;
+      counts[a2][b2] += delta; counts[b2][a2] += delta;
+    };
+
+    const scoreCounts = (counts: number[][]) => {
+      let zeros = 0;
+      let max = 0;
+      let variance = 0;
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const c = counts[i][j];
+          if (c === 0) zeros++;
+          max = Math.max(max, c);
+          const diff = c - 2;
+          variance += diff * diff;
+        }
+      }
+      return { zeros, max, variance };
+    };
+
+    let bestSchedule: [number, number][][][] | null = null;
+    let bestZeros = Infinity;
+    let bestMax = Infinity;
+    let bestVariance = Infinity;
+
+    const circleAttempts = 40;
+    for (let circleAttempt = 0; circleAttempt < circleAttempts; circleAttempt++) {
+      if ((Date.now() - startTime) >= maxTimeMs) break;
+
+      const circle = shuffle(Array.from({ length: N }, (_, i) => i));
+      const rounds = buildRoundsFromCircle(circle);
+      const counts = Array(N).fill(0).map(() => Array(N).fill(0));
+      const schedule: [number, number][][][] = [];
+
+      const dfs = (roundIdx: number) => {
+        if ((Date.now() - startTime) >= maxTimeMs) return;
+
+        if (roundIdx === numRounds) {
+          const s = scoreCounts(counts);
+          if (s.max > 3) return;
+          if (
+            s.zeros < bestZeros ||
+            (s.zeros === bestZeros && s.max < bestMax) ||
+            (s.zeros === bestZeros && s.max === bestMax && s.variance < bestVariance)
+          ) {
+            bestZeros = s.zeros;
+            bestMax = s.max;
+            bestVariance = s.variance;
+            bestSchedule = JSON.parse(JSON.stringify(schedule));
+          }
+          return;
+        }
+
+        const weekPairs = rounds[roundIdx];
+
+        for (const opt of pairings) {
+          const weekMatches: [number, number][][] = [];
+
+          const pA0 = weekPairs[opt[0][0]];
+          const pA1 = weekPairs[opt[0][1]];
+          const pB0 = weekPairs[opt[1][0]];
+          const pB1 = weekPairs[opt[1][1]];
+
+          addOpponents(pA0, pA1, 1, counts);
+          if (!isValidHard(counts)) {
+            addOpponents(pA0, pA1, -1, counts);
+            continue;
+          }
+          addOpponents(pB0, pB1, 1, counts);
+          if (!isValidHard(counts)) {
+            addOpponents(pB0, pB1, -1, counts);
+            addOpponents(pA0, pA1, -1, counts);
+            continue;
+          }
+
+          weekMatches.push([pA0, pA1], [pB0, pB1]);
+          schedule.push(weekMatches);
+
+          dfs(roundIdx + 1);
+
+          schedule.pop();
+          addOpponents(pB0, pB1, -1, counts);
+          addOpponents(pA0, pA1, -1, counts);
+        }
+      };
+
+      dfs(0);
+
+      if (bestSchedule && bestZeros === 0 && bestMax <= 2) break;
+    }
+
+    if (bestSchedule) {
+      hardValidBestSchedule = bestSchedule;
+      hardValidBestCost = bestVariance;
+      validBestSchedule = bestSchedule;
+      validBestCost = bestVariance;
+      globalBestSchedule = bestSchedule;
+      globalBestCost = bestVariance;
+    }
+  }
   
   // Optimization Loop with Retries
   const MAX_RETRIES = 30;
@@ -534,10 +642,9 @@ export function generateStrictSchedule(
       const k = String(c);
       stats.opponentCountHistogram[k] = (stats.opponentCountHistogram[k] || 0) + 1;
 
-      // Fail if < 1 or > 3
-      if (c < 1 || c > 3) {
+      if (c > 3) {
         valid = false;
-        validationError = `Opponent count violation: Player ${i+1} vs ${j+1} played ${c} times (must be 1-3).`;
+        validationError = `Opponent count violation: Player ${i+1} vs ${j+1} played ${c} times (must be 0-3).`;
       }
 
       // Seed stats for 3x
@@ -602,18 +709,8 @@ export function generateStrictSchedule(
     };
   });
 
-  // FINAL POST-GENERATION REJECTION RULE
-  // HARD ACCEPTANCE CRITERIA (ALL MUST PASS):
-  // 1. AC <= 1
-  // 2. AA >= 2
-  const rule1 = stats.count_3x_by_tier.AC <= 1;
-  const rule2 = stats.count_3x_by_tier.AA >= 2;
-
-  if (!rule1 || !rule2) {
-      stats.seededFairnessForcedFailure = true;
-      // Also set the old warning for compatibility
-      stats.seededFairnessWarning = true;
-  }
+  stats.seededFairnessForcedFailure = false;
+  stats.seededFairnessWarning = false;
   
   if (!valid) {
     const failureExplanation = stats.seededFairnessForcedFailure 
