@@ -181,41 +181,41 @@ export function generateStrictSchedule(
 
   // 3. CONSTRUCTION (Partner-Perfect Wheel)
   // Polygon method for 1-factorization of K_N
-  const rounds: Array<Array<[number, number]>> = [];
   const numRounds = N - 1;
-  
-  // Initialize ring 0..N-2
-  const ring = Array.from({ length: N - 1 }, (_, i) => i);
-  const fixedPoint = N - 1;
+  const matchesPerWeek = N / 4;
 
-  for (let r = 0; r < numRounds; r++) {
-    const roundPairs: [number, number][] = [];
-    
-    // Pair with center
-    roundPairs.push([ring[0], fixedPoint]);
-    
-    // Pair others
-    for (let k = 1; k <= (N - 2) / 2; k++) {
-      const p1 = ring[k];
-      const p2 = ring[ring.length - k];
-      roundPairs.push([p1, p2]);
+  const shuffle = <T,>(arr: T[]): T[] => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
     }
-    
-    rounds.push(roundPairs);
-    
-    // Rotate ring
-    const last = ring.pop()!;
-    ring.unshift(last);
-  }
+    return a;
+  };
 
-  // Initial schedule
-  let schedule = rounds.map(weekPairs => {
-    const matches: [number, number][][] = [];
-    for (let i = 0; i < weekPairs.length; i += 2) {
-      matches.push([weekPairs[i], weekPairs[i+1]]);
+  const buildRoundsFromCircle = (circle: number[]) => {
+    const ring = circle.slice(0, N - 1);
+    const fixedPoint = circle[N - 1];
+    const rounds: Array<Array<[number, number]>> = [];
+
+    for (let r = 0; r < numRounds; r++) {
+      const roundPairs: [number, number][] = [];
+      roundPairs.push([ring[0], fixedPoint]);
+
+      for (let k = 1; k <= (N - 2) / 2; k++) {
+        const p1 = ring[k];
+        const p2 = ring[ring.length - k];
+        roundPairs.push([p1, p2]);
+      }
+
+      rounds.push(roundPairs);
+
+      const last = ring.pop()!;
+      ring.unshift(last);
     }
-    return matches;
-  });
+
+    return rounds;
+  };
 
   // 4. OPTIMIZATION (Hill Climbing with Random Restarts)
   
@@ -229,10 +229,8 @@ export function generateStrictSchedule(
     return cost;
   };
 
-  const matchesPerWeek = N / 4;
-  
   // Best Schedules Hierarchy
-  let globalBestSchedule = JSON.parse(JSON.stringify(schedule));
+  let globalBestSchedule: [number, number][][][] | null = null;
   let globalBestCost = Infinity;
 
   // Level 1: Hard Constraints Met (1 <= count <= 3)
@@ -296,7 +294,7 @@ export function generateStrictSchedule(
   };
   
   // Optimization Loop with Retries
-  const MAX_RETRIES = 12;
+  const MAX_RETRIES = 30;
   let attempt = 0;
 
   while (attempt < MAX_RETRIES && !validBestSchedule) {
@@ -306,12 +304,18 @@ export function generateStrictSchedule(
     // If we are out of time, we stop.
     if ((Date.now() - startTime) >= maxTimeMs) break;
 
-    // 4a. Random Initial State (Shuffle matches within weeks)
+    // 4a. Random Initial State
+    // Important: randomize the underlying 1-factorization by permuting the circle order.
+    // This dramatically improves solvability for N=8/12/etc.
+    const circle = shuffle(Array.from({ length: N }, (_, i) => i));
+    const rounds = buildRoundsFromCircle(circle);
+
+    // Shuffle pair order within each week before grouping into matches
     const currentSchedule = rounds.map(weekPairs => {
-      const shuffled = [...weekPairs].sort(() => Math.random() - 0.5);
+      const shuffledPairs = shuffle(weekPairs);
       const matches: [number, number][][] = [];
-      for (let i = 0; i < shuffled.length; i += 2) {
-        matches.push([shuffled[i], shuffled[i+1]]);
+      for (let i = 0; i < shuffledPairs.length; i += 2) {
+        matches.push([shuffledPairs[i], shuffledPairs[i + 1]]);
       }
       return matches;
     });
@@ -319,6 +323,11 @@ export function generateStrictSchedule(
     const currentCounts = Array(N).fill(0).map(() => Array(N).fill(0));
     updateCounts(currentSchedule, 'add', currentCounts);
     let currentCost = calculateTotalCostFromCounts(currentCounts);
+
+    if (!globalBestSchedule || currentCost < globalBestCost) {
+      globalBestCost = currentCost;
+      globalBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
+    }
 
     // 4b. Local Search
     let localIter = 0;
@@ -449,11 +458,6 @@ export function generateStrictSchedule(
         }
     }
 
-    if (currentCost < globalBestCost) {
-        globalBestCost = currentCost;
-        globalBestSchedule = JSON.parse(JSON.stringify(currentSchedule));
-    }
-    
     // Check validation if this is a candidate for valid best
     const isHardValid = isValidHard(currentCounts);
     
@@ -476,6 +480,17 @@ export function generateStrictSchedule(
 
   // Use Best Available Schedule
   // Priority: ValidBest (Hard+Fair) > HardValidBest (Hard) > GlobalBest
+  if (!globalBestSchedule) {
+    return {
+      ok: false,
+      error: {
+        code: "SCHEDULER_INTERNAL_ERROR",
+        message: "Failed to initialize scheduler state."
+      }
+    };
+  }
+
+  let schedule: [number, number][][][];
   if (validBestSchedule) {
       schedule = validBestSchedule;
       globalBestCost = validBestCost;
