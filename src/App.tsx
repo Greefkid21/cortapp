@@ -23,6 +23,7 @@ import { CompetitionDetail } from './pages/CompetitionDetail';
 import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
+import { generateSchedule } from './lib/scheduler';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -340,6 +341,61 @@ function MainApp() {
     }
   };
 
+  const handleGenerateFixtures = async (startDate: string) => {
+    if (!supabase) return;
+    if (!currentSeasonId) {
+      alert('No active season found. Please ensure a season exists and is active.');
+      return;
+    }
+
+    const eligiblePlayers = players.filter(p => p.in_league !== false);
+    const result = generateSchedule(eligiblePlayers, startDate);
+    if (result.error) {
+      alert(`Failed to generate fixtures: ${result.error.message}`);
+      return;
+    }
+
+    const scheduledMatches = (result.fixtures ? result.fixtures.flat() : result.matches).filter(m => m.team1.length === 2 && m.team2.length === 2);
+    if (scheduledMatches.length === 0) {
+      alert('No fixtures were generated. Ensure each division has a player count divisible by 4.');
+      return;
+    }
+
+    const shouldReplace = confirm('Generate new fixtures? This will delete all non-completed fixtures for the current season.');
+    if (!shouldReplace) return;
+
+    const { error: deleteError } = await supabase
+      .from('matches')
+      .delete()
+      .eq('season_id', currentSeasonId)
+      .neq('status', 'completed');
+
+    if (deleteError) {
+      alert(`Failed to clear existing fixtures: ${deleteError.message}`);
+      return;
+    }
+
+    const insertRows = scheduledMatches.map(m => ({
+      season_id: currentSeasonId,
+      date: m.date,
+      team1_player1_id: m.team1[0],
+      team1_player2_id: m.team1[1],
+      team2_player1_id: m.team2[0],
+      team2_player2_id: m.team2[1],
+      status: 'scheduled',
+      winner: null
+    }));
+
+    const { error: insertError } = await supabase.from('matches').insert(insertRows);
+    if (insertError) {
+      alert(`Failed to save fixtures: ${insertError.message}`);
+      return;
+    }
+
+    await fetchData();
+    alert('Fixtures generated!');
+  };
+
   const handleResetForNewSeason = async () => {
     if (supabase) {
         // Reset all player stats to 0
@@ -509,7 +565,7 @@ function MainApp() {
         <Route index element={<RequireAuth><Home players={players} matches={matches} /></RequireAuth>} />
         <Route path="competitions" element={<RequireAuth><Competitions players={players} /></RequireAuth>} />
         <Route path="competitions/:id" element={<RequireAuth><CompetitionDetail players={players} /></RequireAuth>} />
-        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} /></RequireAuth>} />
+        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} onGenerateFixtures={handleGenerateFixtures} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
         <Route path="rules" element={<RequireAuth><Rules /></RequireAuth>} />
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />

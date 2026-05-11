@@ -1,20 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Player, Match } from '../types';
-import { Calendar, Play, MessageSquare, Check, X, HelpCircle, Edit2 } from 'lucide-react';
+import { Calendar, Play, MessageSquare, Check, X, HelpCircle, Edit2, Sparkles, Save } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useAvailability } from '../context/AvailabilityContext';
-import { getWeekStartDate, formatDate } from '../lib/utils';
+import { getNextWeekStartDate, getWeekStartDate, formatDate } from '../lib/utils';
 import { MatchAvailabilityStatus } from '../components/MatchAvailabilityStatus';
 
 interface FixturesProps {
   players: Player[];
   matches: Match[];
   onUpdateMatch?: (updated: Match) => void;
+  onGenerateFixtures?: (startDate: string) => Promise<void>;
 }
 
-export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
+export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }: FixturesProps) {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const { getAvailability } = useAvailability();
@@ -27,7 +28,11 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
   const [newVenue, setNewVenue] = useState<string>('');
   const [editTeam1, setEditTeam1] = useState<string[]>([]);
   const [editTeam2, setEditTeam2] = useState<string[]>([]);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [genStartDate, setGenStartDate] = useState(getNextWeekStartDate());
+  const [generating, setGenerating] = useState(false);
   
+  const leaguePlayers = useMemo(() => players.filter(p => p.in_league !== false), [players]);
   const scheduledMatches = matches
     .filter(m => m.status !== 'completed')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -72,6 +77,16 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
                 <MessageSquare className="w-3 h-3" /> Check Match Chat for detailed player availability
             </p>
         </div>
+        {isAdmin && (
+          <button
+            onClick={() => setShowGenerate(true)}
+            className="bg-slate-900 text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
+            title="Generate Fixtures"
+          >
+            <Sparkles className="w-5 h-5 text-amber-400" />
+            Generate
+          </button>
+        )}
       </div>
 
       {/* Scheduled Matches List */}
@@ -340,6 +355,67 @@ export function Fixtures({ players, matches, onUpdateMatch }: FixturesProps) {
                   className="flex-1 py-3 text-white font-bold bg-primary rounded-xl hover:bg-teal-700"
                 >
                   Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showGenerate && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-800">Generate Fixtures</h3>
+              <button onClick={() => setShowGenerate(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 font-medium">
+                This creates weekly fixtures for Division 1 and Division 2 using the partner-rotation scheduler.
+                Each division must have a player count divisible by 4.
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">Start Week (Monday)</label>
+                <input
+                  type="date"
+                  value={genStartDate}
+                  onChange={(e) => setGenStartDate(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+
+              <div className="text-xs text-slate-500 font-medium">
+                Eligible players: {leaguePlayers.length}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowGenerate(false)}
+                  className="flex-1 py-3 text-slate-600 font-bold bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+                  disabled={generating}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!onGenerateFixtures) return;
+                    setGenerating(true);
+                    try {
+                      await onGenerateFixtures(genStartDate);
+                      setShowGenerate(false);
+                    } finally {
+                      setGenerating(false);
+                    }
+                  }}
+                  disabled={generating || !onGenerateFixtures}
+                  className="flex-1 py-3 text-white font-bold bg-primary rounded-xl hover:bg-teal-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {generating ? <Save className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                  {generating ? 'Generating...' : 'Generate'}
                 </button>
               </div>
             </div>
