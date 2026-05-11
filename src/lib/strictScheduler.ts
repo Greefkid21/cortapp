@@ -131,6 +131,7 @@ export function generateStrictSchedule(
 
   const N = players.length;
   const startTime = Date.now();
+  const maxOpponentRepeatAllowed = N === 8 ? 4 : 3;
 
   // 1. ELIGIBILITY CHECKS
   if (N % 4 !== 0) {
@@ -159,6 +160,7 @@ export function generateStrictSchedule(
       if (count === 1 || count === 3) return COST_GAP;
       if (count === 0) return COST_VIOLATION;
       // count >= 4
+      if (maxOpponentRepeatAllowed >= 4 && count === 4) return COST_VIOLATION * 2;
       return COST_VIOLATION + (count - 3) * COST_VIOLATION; 
   };
 
@@ -226,12 +228,12 @@ export function generateStrictSchedule(
 
   const isValidFairness = (_countsMatrix: number[][]): boolean => true;
 
-  // Validation Helper for Hard Constraints (max repeat <= 3)
+  // Validation Helper for Hard Constraints
   const isValidHard = (countsMatrix: number[][]): boolean => {
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         const c = countsMatrix[i][j];
-        if (c > 3) return false;
+        if (c > maxOpponentRepeatAllowed) return false;
       }
     }
     return true;
@@ -306,23 +308,26 @@ export function generateStrictSchedule(
 
     const scoreCounts = (counts: number[][]) => {
       let zeros = 0;
+      let fours = 0;
       let max = 0;
       let variance = 0;
       for (let i = 0; i < N; i++) {
         for (let j = i + 1; j < N; j++) {
           const c = counts[i][j];
           if (c === 0) zeros++;
+          if (c === 4) fours++;
           max = Math.max(max, c);
           const diff = c - 2;
           variance += diff * diff;
         }
       }
-      return { zeros, max, variance };
+      return { zeros, fours, max, variance };
     };
 
     let bestSchedule: [number, number][][][] | null = null;
-    let bestZeros = Infinity;
     let bestMax = Infinity;
+    let bestFours = Infinity;
+    let bestZeros = Infinity;
     let bestVariance = Infinity;
 
     const circleAttempts = 40;
@@ -339,14 +344,16 @@ export function generateStrictSchedule(
 
         if (roundIdx === numRounds) {
           const s = scoreCounts(counts);
-          if (s.max > 3) return;
+          if (s.max > maxOpponentRepeatAllowed) return;
           if (
-            s.zeros < bestZeros ||
-            (s.zeros === bestZeros && s.max < bestMax) ||
-            (s.zeros === bestZeros && s.max === bestMax && s.variance < bestVariance)
+            s.max < bestMax ||
+            (s.max === bestMax && s.fours < bestFours) ||
+            (s.max === bestMax && s.fours === bestFours && s.zeros < bestZeros) ||
+            (s.max === bestMax && s.fours === bestFours && s.zeros === bestZeros && s.variance < bestVariance)
           ) {
-            bestZeros = s.zeros;
             bestMax = s.max;
+            bestFours = s.fours;
+            bestZeros = s.zeros;
             bestVariance = s.variance;
             bestSchedule = JSON.parse(JSON.stringify(schedule));
           }
@@ -388,7 +395,7 @@ export function generateStrictSchedule(
 
       dfs(0);
 
-      if (bestSchedule && bestZeros === 0 && bestMax <= 2) break;
+      if (bestSchedule && bestMax <= 4 && bestFours <= 2 && bestZeros <= 1) break;
     }
 
     if (bestSchedule) {
@@ -642,9 +649,9 @@ export function generateStrictSchedule(
       const k = String(c);
       stats.opponentCountHistogram[k] = (stats.opponentCountHistogram[k] || 0) + 1;
 
-      if (c > 3) {
+      if (c > maxOpponentRepeatAllowed) {
         valid = false;
-        validationError = `Opponent count violation: Player ${i+1} vs ${j+1} played ${c} times (must be 0-3).`;
+        validationError = `Opponent count violation: Player ${i+1} vs ${j+1} played ${c} times (must be 0-${maxOpponentRepeatAllowed}).`;
       }
 
       // Seed stats for 3x
