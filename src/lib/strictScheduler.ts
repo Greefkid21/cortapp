@@ -152,6 +152,13 @@ export function generateStrictSchedule(
   // even when perfect opponent coverage (no 0s) is not achievable for a given division.
   const COST_GAP = 1000;
   const COST_VIOLATION = 50000000; // 50M
+  const COST_SEED_MATCH_BALANCE = 2500;
+
+  const teamStrength = (pair: [number, number]) => seedNorm(pair[0]) + seedNorm(pair[1]);
+  const matchSeedBalanceCost = (a: [number, number], b: [number, number]) => {
+    const diff = teamStrength(a) - teamStrength(b);
+    return diff * diff;
+  };
 
   // Cost Function
   const getPairCost = (_i: number, _j: number, count: number): number => {
@@ -212,6 +219,16 @@ export function generateStrictSchedule(
       }
     }
     return cost;
+  };
+
+  const calculateTotalScheduleSeedCost = (sched: [number, number][][][]) => {
+    let cost = 0;
+    for (const week of sched) {
+      for (const match of week) {
+        cost += matchSeedBalanceCost(match[0], match[1]);
+      }
+    }
+    return cost * COST_SEED_MATCH_BALANCE;
   };
 
   // Best Schedules Hierarchy
@@ -328,6 +345,7 @@ export function generateStrictSchedule(
     let bestMax = Infinity;
     let bestFours = Infinity;
     let bestZeros = Infinity;
+    let bestSeedCost = Infinity;
     let bestVariance = Infinity;
 
     const circleAttempts = 40;
@@ -345,15 +363,18 @@ export function generateStrictSchedule(
         if (roundIdx === numRounds) {
           const s = scoreCounts(counts);
           if (s.max > maxOpponentRepeatAllowed) return;
+          const seedCost = calculateTotalScheduleSeedCost(schedule);
           if (
             s.max < bestMax ||
             (s.max === bestMax && s.fours < bestFours) ||
             (s.max === bestMax && s.fours === bestFours && s.zeros < bestZeros) ||
-            (s.max === bestMax && s.fours === bestFours && s.zeros === bestZeros && s.variance < bestVariance)
+            (s.max === bestMax && s.fours === bestFours && s.zeros === bestZeros && seedCost < bestSeedCost) ||
+            (s.max === bestMax && s.fours === bestFours && s.zeros === bestZeros && seedCost === bestSeedCost && s.variance < bestVariance)
           ) {
             bestMax = s.max;
             bestFours = s.fours;
             bestZeros = s.zeros;
+            bestSeedCost = seedCost;
             bestVariance = s.variance;
             bestSchedule = JSON.parse(JSON.stringify(schedule));
           }
@@ -400,11 +421,11 @@ export function generateStrictSchedule(
 
     if (bestSchedule) {
       hardValidBestSchedule = bestSchedule;
-      hardValidBestCost = bestVariance;
+      hardValidBestCost = bestVariance + (bestSeedCost / COST_SEED_MATCH_BALANCE);
       validBestSchedule = bestSchedule;
-      validBestCost = bestVariance;
+      validBestCost = bestVariance + (bestSeedCost / COST_SEED_MATCH_BALANCE);
       globalBestSchedule = bestSchedule;
-      globalBestCost = bestVariance;
+      globalBestCost = bestVariance + (bestSeedCost / COST_SEED_MATCH_BALANCE);
     }
   }
   
@@ -437,7 +458,7 @@ export function generateStrictSchedule(
 
     const currentCounts = Array(N).fill(0).map(() => Array(N).fill(0));
     updateCounts(currentSchedule, 'add', currentCounts);
-    let currentCost = calculateTotalCostFromCounts(currentCounts);
+    let currentCost = calculateTotalCostFromCounts(currentCounts) + calculateTotalScheduleSeedCost(currentSchedule);
 
     if (!globalBestSchedule || currentCost < globalBestCost) {
       globalBestCost = currentCost;
@@ -456,7 +477,7 @@ export function generateStrictSchedule(
              // Reset and recompute
              for(let i=0; i<N; i++) for(let j=0; j<N; j++) currentCounts[i][j] = 0;
              updateCounts(currentSchedule, 'add', currentCounts);
-             currentCost = calculateTotalCostFromCounts(currentCounts);
+             currentCost = calculateTotalCostFromCounts(currentCounts) + calculateTotalScheduleSeedCost(currentSchedule);
         }
 
         // Pick a random week
@@ -520,6 +541,14 @@ export function generateStrictSchedule(
                     delta -= getPairCost(p1, p2, c);
                     delta += getPairCost(p1, p2, c + 1);
                 }
+
+                const oldSeed =
+                  matchSeedBalanceCost(t1_stay, t1_move) +
+                  matchSeedBalanceCost(t2_stay, t2_move);
+                const newSeed =
+                  matchSeedBalanceCost(t1_stay, t2_move) +
+                  matchSeedBalanceCost(t2_stay, t1_move);
+                delta += (newSeed - oldSeed) * COST_SEED_MATCH_BALANCE;
                 
                 return delta;
             };
