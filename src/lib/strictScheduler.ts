@@ -621,128 +621,6 @@ export function generateStrictSchedule(
   for(let i=0; i<N; i++) for(let j=0; j<N; j++) opponentCounts[i][j] = 0;
   updateCounts(schedule, 'add', opponentCounts);
 
-  if (N === 8) {
-    const listMissingOpponentPairs = () => {
-      const missing: Array<[number, number]> = [];
-      for (let i = 0; i < N; i++) {
-        for (let j = i + 1; j < N; j++) {
-          if (opponentCounts[i][j] === 0) missing.push([i, j]);
-        }
-      }
-      return missing;
-    };
-
-    const currentMaxOpponentRepeat = () => {
-      let m = 0;
-      for (let i = 0; i < N; i++) {
-        for (let j = i + 1; j < N; j++) {
-          m = Math.max(m, opponentCounts[i][j]);
-        }
-      }
-      return m;
-    };
-
-    const generateAllWeekConfigs = () => {
-      const weekConfigs: [number, number][][][] = [];
-
-      const genPairings = (remaining: number[], pairs: [number, number][]) => {
-        if (remaining.length === 0) {
-          const teams = pairs;
-          const teamPairings: Array<[[number, number], [number, number]]> = [
-            [[0, 1], [2, 3]],
-            [[0, 2], [1, 3]],
-            [[0, 3], [1, 2]],
-          ];
-
-          for (const [[a, b], [c, d]] of teamPairings) {
-            weekConfigs.push([
-              [teams[a], teams[b]],
-              [teams[c], teams[d]],
-            ]);
-          }
-          return;
-        }
-
-        const [first, ...rest] = remaining;
-        for (let i = 0; i < rest.length; i++) {
-          const partner = rest[i];
-          const nextRemaining = rest.filter((_, idx) => idx !== i);
-          pairs.push([first, partner]);
-          genPairings(nextRemaining, pairs);
-          pairs.pop();
-        }
-      };
-
-      genPairings(Array.from({ length: N }, (_, i) => i), []);
-      return weekConfigs;
-    };
-
-    const weekConfigs = generateAllWeekConfigs();
-    let missingPairs = listMissingOpponentPairs();
-    let extraWeeksAdded = 0;
-
-    while (missingPairs.length > 0 && extraWeeksAdded < 3 && (Date.now() - startTime) < maxTimeMs) {
-      const missingSet = new Set(missingPairs.map(([i, j]) => `${i}-${j}`));
-      const baseMax = currentMaxOpponentRepeat();
-
-      let bestConfig: [number, number][][] | null = null;
-      let bestNewlyCovered = -1;
-      let bestOverCap = Infinity;
-      let bestMaxAfter = Infinity;
-      let bestAddedHigh = Infinity;
-
-      for (const config of weekConfigs) {
-        let newlyCovered = 0;
-        let overCap = 0;
-        let maxAfter = baseMax;
-        let addedHigh = 0;
-
-        const coveredThisWeek = new Set<string>();
-        for (const match of config) {
-          const t1 = match[0];
-          const t2 = match[1];
-          for (const a of t1) {
-            for (const b of t2) {
-              const i = Math.min(a, b);
-              const j = Math.max(a, b);
-              const key = `${i}-${j}`;
-              const before = opponentCounts[i][j];
-              const after = before + 1;
-              maxAfter = Math.max(maxAfter, after);
-              if (after > 4) overCap++;
-              if (after >= 4) addedHigh++;
-              if (before === 0 && missingSet.has(key) && !coveredThisWeek.has(key)) {
-                coveredThisWeek.add(key);
-                newlyCovered++;
-              }
-            }
-          }
-        }
-
-        const better =
-          newlyCovered > bestNewlyCovered ||
-          (newlyCovered === bestNewlyCovered && overCap < bestOverCap) ||
-          (newlyCovered === bestNewlyCovered && overCap === bestOverCap && maxAfter < bestMaxAfter) ||
-          (newlyCovered === bestNewlyCovered && overCap === bestOverCap && maxAfter === bestMaxAfter && addedHigh < bestAddedHigh);
-
-        if (better) {
-          bestConfig = config;
-          bestNewlyCovered = newlyCovered;
-          bestOverCap = overCap;
-          bestMaxAfter = maxAfter;
-          bestAddedHigh = addedHigh;
-        }
-      }
-
-      if (!bestConfig || bestNewlyCovered <= 0) break;
-
-      schedule.push(bestConfig);
-      updateCounts([bestConfig], 'add', opponentCounts);
-      missingPairs = listMissingOpponentPairs();
-      extraWeeksAdded++;
-    }
-  }
-
   // 5. VALIDATION & STATS
   const stats: StrictModeStats = {
     maxOpponentRepeat: 0,
@@ -771,7 +649,7 @@ export function generateStrictSchedule(
       const k = String(c);
       stats.opponentCountHistogram[k] = (stats.opponentCountHistogram[k] || 0) + 1;
 
-      if (N !== 8 && c > maxOpponentRepeatAllowed) {
+      if (c > maxOpponentRepeatAllowed) {
         valid = false;
         validationError = `Opponent count violation: Player ${i+1} vs ${j+1} played ${c} times (must be 0-${maxOpponentRepeatAllowed}).`;
       }
@@ -842,26 +720,19 @@ export function generateStrictSchedule(
   stats.seededFairnessWarning = false;
   
   if (!valid) {
-    if (N === 8) {
-      stats.seededFairnessForcedFailure = true;
-      stats.seededFairnessWarning = true;
-      valid = true;
-      validationError = "";
-    } else {
-      const failureExplanation = stats.seededFairnessForcedFailure 
-        ? "Strict partner rotation and mathematical constraints prevented full seeded enforcement."
-        : undefined;
+    const failureExplanation = stats.seededFairnessForcedFailure 
+      ? "Strict partner rotation and mathematical constraints prevented full seeded enforcement."
+      : undefined;
 
-      return {
-        ok: false,
-        error: {
-          code: "FAIRNESS_VALIDATION_FAILED",
-          message: validationError
-        },
-        stats, // Return stats even on failure for debugging
-        explanation: failureExplanation
-      };
-    }
+    return {
+      ok: false,
+      error: {
+        code: "FAIRNESS_VALIDATION_FAILED",
+        message: validationError
+      },
+      stats, // Return stats even on failure for debugging
+      explanation: failureExplanation
+    };
   }
 
   // 6. FORMAT OUTPUT
