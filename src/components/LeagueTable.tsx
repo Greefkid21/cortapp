@@ -12,7 +12,7 @@ export function LeagueTable({ players }: LeagueTableProps) {
   const [selectedDivision, setSelectedDivision] = useState<number>(1);
   
   // Filter players by division
-  const divisionPlayers = players.filter(p => (p.division || 1) === selectedDivision);
+  const divisionPlayers = players.filter(p => (p.in_league !== false) && (p.division || 1) === selectedDivision);
 
   // Sort players by points (desc), then net sets/games if needed
   const sortedPlayers = [...divisionPlayers].sort((a, b) => {

@@ -126,6 +126,7 @@ function MainApp() {
             avatar: p.avatar,
             seed: p.seed,
             division: p.division || 1,
+            in_league: p.in_league ?? true,
             stats: {
               matchesPlayed: p.played || 0,
               wins: p.wins || 0,
@@ -373,9 +374,20 @@ function MainApp() {
     }
   };
 
-  const handleAddPlayer = async (name: string, avatar?: string, email?: string, seed?: number) => {
+  const handleAddPlayer = async (
+    name: string,
+    avatar?: string,
+    email?: string,
+    seed?: number,
+    division: number = 1,
+    inLeague: boolean = true
+  ) => {
     if (supabase) {
-        const { data, error } = await supabase.from('players').insert([{ name, avatar, seed }]).select().single();
+        const { data, error } = await supabase
+          .from('players')
+          .insert([{ name, avatar, seed, division, in_league: inLeague }])
+          .select()
+          .single();
         
         if (error) {
             console.error('Error adding player:', error);
@@ -389,6 +401,8 @@ function MainApp() {
                 name: data.name,
                 avatar: data.avatar,
                 seed: data.seed,
+                division: data.division || division,
+                in_league: data.in_league ?? inLeague,
                 stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
              };
              // Use functional update to ensure fresh state
@@ -422,6 +436,8 @@ function MainApp() {
             id: Math.random().toString(36).substr(2, 9),
             name,
             avatar,
+            division,
+            in_league: inLeague,
             stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
         };
         setPlayers(prev => [...prev, newPlayer]);
@@ -432,9 +448,18 @@ function MainApp() {
     }
   };
 
-  const handleUpdatePlayer = async (id: string, name: string, avatar?: string, seed?: number, division?: number) => {
+  const handleUpdatePlayer = async (
+    id: string,
+    name: string,
+    avatar?: string,
+    seed?: number,
+    division?: number,
+    inLeague?: boolean
+  ) => {
     if (supabase) {
-        const { error } = await supabase.from('players').update({ name, avatar, seed, division }).eq('id', id);
+        const updateData: any = { name, avatar, seed, division };
+        if (inLeague !== undefined) updateData.in_league = inLeague;
+        const { error } = await supabase.from('players').update(updateData).eq('id', id);
         
         if (error) {
             console.error('Error updating player:', error);
@@ -442,9 +467,9 @@ function MainApp() {
             return;
         }
 
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division, in_league: inLeague ?? p.in_league } : p));
     } else {
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division, in_league: inLeague ?? p.in_league } : p));
     }
   };
 

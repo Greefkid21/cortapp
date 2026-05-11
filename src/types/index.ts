@@ -4,6 +4,7 @@ export interface Player {
   seed?: number; // 1 = strongest, higher = weaker
   avatar?: string;
   division?: number; // 1 for Division 1, 2 for Division 2, etc.
+  in_league?: boolean; // false = excluded from league table and future fixtures
   stats: {
     matchesPlayed: number;
     wins: number;

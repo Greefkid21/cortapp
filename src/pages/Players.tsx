@@ -8,8 +8,8 @@ import { Link } from 'react-router-dom';
 
 interface PlayersPageProps {
   players: Player[];
-  onAddPlayer: (name: string, avatar?: string, email?: string, seed?: number) => Promise<void>;
-  onUpdatePlayer: (id: string, name: string, avatar?: string, seed?: number, division?: number) => Promise<void>;
+  onAddPlayer: (name: string, avatar?: string, email?: string, seed?: number, division?: number, inLeague?: boolean) => Promise<void>;
+  onUpdatePlayer: (id: string, name: string, avatar?: string, seed?: number, division?: number, inLeague?: boolean) => Promise<void>;
   onDeletePlayer: (id: string) => Promise<void>;
 }
 
@@ -22,6 +22,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
   const [editEmail, setEditEmail] = useState('');
   const [editSeed, setEditSeed] = useState<number | undefined>(undefined);
   const [editDivision, setEditDivision] = useState<number>(1);
+  const [editInLeague, setEditInLeague] = useState<boolean>(true);
   const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,6 +31,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
     setEditEmail('');
     setEditSeed(undefined);
     setEditDivision(1);
+    setEditInLeague(true);
     setEditAvatar(undefined);
     setIsEditing('new');
   };
@@ -39,6 +41,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
     setEditEmail(''); // Don't allow editing email for existing players here yet
     setEditSeed(player.seed);
     setEditDivision(player.division || 1);
+    setEditInLeague(player.in_league !== false);
     setEditAvatar(player.avatar);
     setIsEditing(player.id);
   };
@@ -63,9 +66,9 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
     setIsSubmitting(true);
     try {
       if (isEditing === 'new') {
-        await onAddPlayer(editName, editAvatar, editEmail, editSeed);
+        await onAddPlayer(editName, editAvatar, editEmail, editSeed, editDivision, editInLeague);
       } else if (isEditing) {
-        await onUpdatePlayer(isEditing, editName, editAvatar, editSeed, editDivision);
+        await onUpdatePlayer(isEditing, editName, editAvatar, editSeed, editDivision, editInLeague);
       }
       setIsEditing(null);
     } catch (error) {
@@ -162,19 +165,28 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Division</label>
+                  <label className="text-sm font-bold text-slate-700">League</label>
                   <select
-                    value={editDivision}
-                    onChange={(e) => setEditDivision(parseInt(e.target.value))}
+                    value={editInLeague ? String(editDivision) : 'none'}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === 'none') {
+                        setEditInLeague(false);
+                      } else {
+                        setEditInLeague(true);
+                        setEditDivision(parseInt(v));
+                      }
+                    }}
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                   >
-                    <option value={1}>Division 1</option>
-                    <option value={2}>Division 2</option>
+                    <option value="1">Division 1</option>
+                    <option value="2">Division 2</option>
+                    <option value="none">No League</option>
                   </select>
                 </div>
               </div>
               <p className="text-xs text-slate-500">
-                Seed 1 is strongest. Divisions separate players for future fixture generation.
+                Seed 1 is strongest. “No League” excludes the player from the league table and next season fixtures.
               </p>
 
               {/* Email Input (New Player Only) */}
@@ -232,7 +244,11 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
                 <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors">{player.name}</h3>
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-xs text-slate-500">{player.stats.matchesPlayed} matches played</p>
-                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">Div {player.division || 1}</span>
+                  {player.in_league === false ? (
+                    <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">No League</span>
+                  ) : (
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">Div {player.division || 1}</span>
+                  )}
                 </div>
                 {/* Availability Info */}
                 <div className="flex items-center gap-2 text-xs">
