@@ -164,8 +164,8 @@ export function generateStrictSchedule(
   const { pSeeds, seedNorm, getTier } = getSeedMetrics(players);
 
   // Config
-  // Increased costs to prioritize hard constraints (1-3 plays)
-  // Updated for deployment trigger (v3 - forcing git change)
+  // Costs are tuned to strongly prefer opponent balance, but we now allow best-effort schedules
+  // even when perfect opponent coverage (no 0s) is not achievable for a given division.
   const COST_GAP = 1000;
   const COST_VIOLATION = 50000000; // 50M
 
@@ -266,12 +266,14 @@ export function generateStrictSchedule(
     return ac3 <= 1 && aa3 >= 2;
   };
 
-  // Validation Helper for Hard Constraints (1-3 repeats)
+  // Validation Helper for Hard Constraints (best-effort):
+  // We still strongly prefer opponent counts in [1..3] via cost,
+  // but we only hard-reject extreme repeats (> 3).
   const isValidHard = (countsMatrix: number[][]): boolean => {
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         const c = countsMatrix[i][j];
-        if (c < 1 || c > 3) return false;
+        if (c > 3) return false;
       }
     }
     return true;
@@ -506,8 +508,8 @@ export function generateStrictSchedule(
     per_player_strength_of_schedule: []
   };
 
-  let valid = true;
-  let validationError = "";
+  let hasOpponentZero = false;
+  let hasOpponentOverMax = false;
 
   // Check Fairness Floors
   for (let i = 0; i < N; i++) {
@@ -519,11 +521,8 @@ export function generateStrictSchedule(
       const k = String(c);
       stats.opponentCountHistogram[k] = (stats.opponentCountHistogram[k] || 0) + 1;
 
-      // Fail if < 1 or > 3
-      if (c < 1 || c > 3) {
-        valid = false;
-        validationError = `Opponent count violation: Player ${i+1} vs ${j+1} played ${c} times (must be 1-3).`;
-      }
+      if (c === 0) hasOpponentZero = true;
+      if (c > 3) hasOpponentOverMax = true;
 
       // Seed stats for 3x
       if (c === 3) {
@@ -600,20 +599,8 @@ export function generateStrictSchedule(
       stats.seededFairnessWarning = true;
   }
   
-  if (!valid) {
-    const failureExplanation = stats.seededFairnessForcedFailure 
-      ? "Strict partner rotation and mathematical constraints prevented full seeded enforcement."
-      : undefined;
-
-    return {
-      ok: false,
-      error: {
-        code: "FAIRNESS_VALIDATION_FAILED",
-        message: validationError
-      },
-      stats, // Return stats even on failure for debugging
-      explanation: failureExplanation
-    };
+  if (hasOpponentZero || hasOpponentOverMax) {
+    stats.seededFairnessWarning = true;
   }
 
   // 6. FORMAT OUTPUT
@@ -655,6 +642,10 @@ Generated strict mode schedule for ${N} players.
 - Seed Logic: 3x repeats biased by Tier (A=1-4, B=5-8, C=9-12).
   (AA: ${stats.count_3x_by_tier.AA}, AC: ${stats.count_3x_by_tier.AC}, CC: ${stats.count_3x_by_tier.CC}).
 `.trim();
+
+  if (hasOpponentZero || hasOpponentOverMax) {
+      explanation += `\n- NOTE: Best-effort schedule (some opponent pairs may be 0x or >3x due to constraints).`;
+  }
 
   if (hardSchedulePlayers.length > 0) {
       explanation += `\n- Note: Players ${hardSchedulePlayers.join(', ')} have a harder than average schedule.`;
