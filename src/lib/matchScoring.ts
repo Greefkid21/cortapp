@@ -66,11 +66,11 @@ export function calculateMatchStats(match: Match) {
     const s1 = Number(set.team1 ?? 0);
     const s2 = Number(set.team2 ?? 0);
 
-    t1Games += s1;
-    t2Games += s2;
-
     if (isEmptySetScore(s1, s2)) return;
     if (!isValidCompletedSetScore(s1, s2)) return;
+
+    t1Games += s1;
+    t2Games += s2;
 
     if (s1 > s2) {
       t1Sets++;
@@ -98,4 +98,3 @@ export function calculateMatchStats(match: Match) {
 
   return { t1Sets, t2Sets, t1Games, t2Games, t1Points, t2Points, winner };
 }
-
