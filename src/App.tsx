@@ -24,6 +24,7 @@ import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
 import { generateSchedule } from './lib/scheduler';
+import { calculateMatchStats, validateMatchScoreInput } from './lib/matchScoring';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -42,56 +43,6 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 
   return children;
 }
-
-// Helper to calculate stats for a match
-const calculateMatchStats = (match: Match) => {
-    if (match.status !== 'completed') {
-         return { t1Sets: 0, t2Sets: 0, t1Games: 0, t2Games: 0, t1Points: 0, t2Points: 0, winner: null as any };
-    }
-
-    let t1Sets = 0, t2Sets = 0;
-    let t1Games = 0, t2Games = 0;
-    let t1Points = 0, t2Points = 0;
-
-    match.sets.forEach(set => {
-        t1Games += set.team1;
-        t2Games += set.team2;
-
-        // Rule: 1 point per FULL set won.
-        // A full set is defined as one where at least one team reaches 6 games.
-        if (set.team1 >= 6 || set.team2 >= 6) {
-            if (set.team1 > set.team2) {
-                t1Sets++;
-                t1Points++;
-            } else if (set.team2 > set.team1) {
-                t2Sets++;
-                t2Points++;
-            }
-        }
-    });
-
-    if (match.tieBreaker) {
-        if (match.tieBreaker.team1 > match.tieBreaker.team2) {
-            // Rule: Win the super tie-breaker -> additional 1 point
-            t1Points += 1;
-            // Rule: Additional game towards +/- for STB win
-            t1Games += 1;
-        } else if (match.tieBreaker.team2 > match.tieBreaker.team1) {
-            t2Points += 1;
-            t2Games += 1;
-        }
-        // If STB is 8-8 (draw), no additional points are added.
-        // Teams keep their 1 point each from the regular sets.
-    }
-
-    // Determine winner based on total points for the match
-    let winner = 'draw' as any;
-    if (t1Points > t2Points) winner = 'team1';
-    else if (t2Points > t1Points) winner = 'team2';
-    else winner = 'draw';
-    
-    return { t1Sets, t2Sets, t1Games, t2Games, t1Points, t2Points, winner };
-};
 
 function MainApp() {
   const { inviteUser, users } = useAuth();
@@ -260,6 +211,15 @@ function MainApp() {
     // 1. Find original match to ensure it exists
     const originalMatch = matches.find(m => m.id === updatedMatch.id);
     if (!originalMatch) return;
+
+    const validation = validateMatchScoreInput(
+      updatedMatch.sets.map(s => ({ t1: s.team1, t2: s.team2 })),
+      updatedMatch.tieBreaker ? { t1: updatedMatch.tieBreaker.team1, t2: updatedMatch.tieBreaker.team2 } : undefined
+    );
+    if (!validation.ok) {
+      alert(validation.message || 'Invalid score entered.');
+      return;
+    }
 
     // Force new match to be completed for stat calculation
     const matchForStats = { ...updatedMatch, status: 'completed' as const };

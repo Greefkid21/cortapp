@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Player, Match } from '../types';
 import { Save, Plus } from 'lucide-react';
+import { validateMatchScoreInput } from '../lib/matchScoring';
 
 interface MatchFormProps {
   players: Player[];
@@ -18,9 +19,20 @@ export function MatchForm({ players, onSubmit, initialData }: MatchFormProps) {
   );
   const [tieBreaker, setTieBreaker] = useState(initialData?.tieBreaker ? { t1: initialData.tieBreaker.team1, t2: initialData.tieBreaker.team2 } : { t1: 0, t2: 0 });
   const [showTieBreaker, setShowTieBreaker] = useState(!!initialData?.tieBreaker);
+  const [error, setError] = useState<string>('');
+
+  const validation = useMemo(() => {
+    const tie = showTieBreaker ? tieBreaker : undefined;
+    return validateMatchScoreInput(sets, tie);
+  }, [sets, showTieBreaker, tieBreaker]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validation.ok) {
+      setError(validation.message || 'Invalid score entered.');
+      return;
+    }
+    setError('');
     const data: any = { 
         team1, 
         team2, 
@@ -84,6 +96,11 @@ export function MatchForm({ players, onSubmit, initialData }: MatchFormProps) {
         {/* Score Entry */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
           <h3 className="font-medium text-slate-900">Score</h3>
+          {error && (
+            <div className="text-sm font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg p-3">
+              {error}
+            </div>
+          )}
           {sets.map((set, idx) => (
             <div key={idx} className="flex items-center justify-center gap-4">
               <span className="w-12 text-sm text-slate-500">Set {idx + 1}</span>
@@ -159,7 +176,8 @@ export function MatchForm({ players, onSubmit, initialData }: MatchFormProps) {
 
       <button 
         type="submit"
-        className="w-full bg-primary text-white py-3 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
+        className="w-full bg-primary text-white py-3 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 hover:bg-teal-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+        disabled={!validation.ok}
       >
         <Save className="w-5 h-5" />
         Save Match
