@@ -17,16 +17,22 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
 
+  const divisionPlayers = useMemo(() => {
+    if (!player || player.in_league === false) return [];
+    const playerDivision = player.division || 1;
+    return players.filter(p => (p.in_league !== false) && (p.division || 1) === playerDivision);
+  }, [players, player]);
+
   const leagueRank = useMemo(() => {
-    if (!player) return 0;
-    const sorted = [...players].sort((a, b) => {
+    if (!player || player.in_league === false) return null;
+    const sorted = [...divisionPlayers].sort((a, b) => {
       if (b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
       return (b.stats.gameDifference || 0) - (a.stats.gameDifference || 0);
     });
     const index = sorted.findIndex(p => p.id === player.id);
-    if (index === -1) return players.indexOf(player) + 1;
+    if (index === -1) return null;
     return index + 1;
-  }, [players, player]);
+  }, [divisionPlayers, player]);
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0 || !player) return;
@@ -171,9 +177,15 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
         <div className="text-center sm:text-left space-y-2">
           <h1 className="text-3xl font-black text-slate-900">{player.name}</h1>
           <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-            <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-sm font-medium">
-              Rank #{leagueRank}
-            </span>
+            {player.in_league === false ? (
+              <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-sm font-medium">
+                No League
+              </span>
+            ) : (
+              <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-sm font-medium">
+                Division {player.division || 1} Rank #{leagueRank ?? '-'}
+              </span>
+            )}
             <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
               {player.stats.points} Points
             </span>
