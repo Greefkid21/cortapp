@@ -38,13 +38,13 @@ export function LeagueTable({ players }: LeagueTableProps) {
     <div className="space-y-4">
       {/* Division Selector */}
       {divisions.length > 1 && (
-        <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
+        <div className="flex flex-wrap p-1 bg-slate-100 rounded-xl w-fit gap-1">
         {divisions.map(div => (
           <button
             key={div}
             onClick={() => setSelectedDivision(div)}
             className={cn(
-              "px-6 py-2 rounded-lg text-sm font-bold transition-all",
+              "px-3 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all",
               selectedDivision === div 
                 ? "bg-white text-primary shadow-sm" 
                 : "text-slate-500 hover:text-slate-700"
@@ -58,17 +58,17 @@ export function LeagueTable({ players }: LeagueTableProps) {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full table-fixed text-xs sm:text-sm text-left">
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
               <tr>
-                <th className="px-4 py-3 w-12 text-center">#</th>
-                <th className="p-4 text-left font-bold text-slate-500">Player</th>
-                <th className="p-4 text-center font-bold text-slate-500">P</th>
-                <th className="px-4 py-3 text-center">W</th>
-                <th className="px-4 py-3 text-center">D</th>
-                <th className="px-4 py-3 text-center">L</th>
-                <th className="px-4 py-3 text-center">+/-</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">Pts</th>
+                <th className="px-2 sm:px-4 py-3 w-8 sm:w-12 text-center">#</th>
+                <th className="px-2 sm:px-4 py-3 text-left font-bold text-slate-500 w-[38%] sm:w-auto">Player</th>
+                <th className="px-1 sm:px-4 py-3 text-center font-bold text-slate-500 w-8 sm:w-auto">P</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-auto">W</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-auto">D</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-auto">L</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-10 sm:w-auto">+/-</th>
+                <th className="px-2 sm:px-4 py-3 text-center font-bold text-slate-700 w-10 sm:w-auto">Pts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -83,16 +83,16 @@ export function LeagueTable({ players }: LeagueTableProps) {
                       isTop3 && "bg-gradient-to-r from-amber-50/10 to-transparent"
                     )}
                   >
-                    <td className="px-4 py-3 text-center font-medium text-slate-400">
+                    <td className="px-2 sm:px-4 py-3 text-center font-medium text-slate-400">
                       {index + 1}
                     </td>
                     <td className="p-0 relative">
                       <Link 
                         to={`/player/${player.id}`} 
-                        className="flex items-center gap-3 hover:bg-slate-50 transition-colors w-full h-full px-4 py-3"
+                        className="flex items-center gap-2 sm:gap-3 hover:bg-slate-50 transition-colors w-full h-full px-2 sm:px-4 py-3 min-w-0"
                       >
                         <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden border",
+                          "hidden sm:flex w-8 h-8 rounded-full items-center justify-center font-bold text-xs overflow-hidden border flex-shrink-0",
                           index === 0 ? "border-yellow-400 ring-2 ring-yellow-100" : 
                           index === 1 ? "border-slate-300" : 
                           index === 2 ? "border-amber-600" : "border-slate-100 bg-slate-100 text-slate-500"
@@ -109,25 +109,25 @@ export function LeagueTable({ players }: LeagueTableProps) {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className={cn("font-medium", index === 0 ? "text-slate-900 font-bold" : "text-slate-700")}>
+                        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                            <span className={cn("font-medium truncate", index === 0 ? "text-slate-900 font-bold" : "text-slate-700")}>
                                 {player.name}
                             </span>
-                            {index === 0 && <Medal className="w-4 h-4 text-yellow-400 fill-yellow-400" />}
+                            {index === 0 && <Medal className="hidden sm:block w-4 h-4 text-yellow-400 fill-yellow-400 flex-shrink-0" />}
                         </div>
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-center text-slate-500">{player.stats.matchesPlayed}</td>
-                    <td className="px-4 py-3 text-center text-green-600 font-medium">{player.stats.wins}</td>
-                    <td className="px-4 py-3 text-center text-slate-500">{player.stats.draws}</td>
-                    <td className="px-4 py-3 text-center text-red-500">{player.stats.losses}</td>
-                    <td className={cn("px-4 py-3 text-center font-medium", 
+                    <td className="px-1 sm:px-4 py-3 text-center text-slate-500">{player.stats.matchesPlayed}</td>
+                    <td className="px-1 sm:px-4 py-3 text-center text-green-600 font-medium">{player.stats.wins}</td>
+                    <td className="px-1 sm:px-4 py-3 text-center text-slate-500">{player.stats.draws}</td>
+                    <td className="px-1 sm:px-4 py-3 text-center text-red-500">{player.stats.losses}</td>
+                    <td className={cn("px-1 sm:px-4 py-3 text-center font-medium", 
                         (player.stats.gameDifference || 0) > 0 ? "text-green-600" : 
                         (player.stats.gameDifference || 0) < 0 ? "text-red-500" : "text-slate-400"
                     )}>
                         {(player.stats.gameDifference || 0) > 0 ? '+' : ''}{player.stats.gameDifference || 0}
                     </td>
-                    <td className="px-4 py-3 text-center font-bold text-primary text-base">{player.stats.points}</td>
+                    <td className="px-2 sm:px-4 py-3 text-center font-bold text-primary text-sm sm:text-base">{player.stats.points}</td>
                   </tr>
                 );
               })}

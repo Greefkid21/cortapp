@@ -209,10 +209,10 @@ function MainApp() {
   }, [currentSeasonId, settings]);
 
 
-  const handleEditMatchResult = async (updatedMatch: Match) => {
+  const handleEditMatchResult = async (updatedMatch: Match): Promise<boolean> => {
     // 1. Find original match to ensure it exists
     const originalMatch = matches.find(m => m.id === updatedMatch.id);
-    if (!originalMatch) return;
+    if (!originalMatch) return false;
 
     const validation = validateMatchScoreInput(
       updatedMatch.sets.map(s => ({ t1: s.team1, t2: s.team2 })),
@@ -220,7 +220,7 @@ function MainApp() {
     );
     if (!validation.ok) {
       alert(validation.message || 'Invalid score entered.');
-      return;
+      return false;
     }
 
     // Force new match to be completed for stat calculation
@@ -239,7 +239,8 @@ function MainApp() {
 
         if (error) {
             console.error('Error updating match:', error);
-            return;
+            alert(`Failed to save result: ${error.message}`);
+            return false;
         }
 
         // Recalculate and update player stats in DB (for caching/sync)
@@ -264,8 +265,10 @@ function MainApp() {
         // Offline mode
         setMatches(prev => prev.map(m => m.id === updatedMatch.id ? { ...updatedMatch, winner: newStats.winner, status: 'completed' } : m));
         // Recalculate players locally
-        fetchData();
+        await fetchData();
     }
+
+    return true;
   };
 
   const handleUpdateMatch = async (updated: Match) => {

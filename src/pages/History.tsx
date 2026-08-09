@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { MatchHistory } from '../components/MatchHistory';
 import { Match, Player } from '../types';
 
-export function HistoryPage({ matches, players, onEditResult }: { matches: Match[], players: Player[], onEditResult?: (match: Match) => void }) {
+export function HistoryPage({ matches, players, onEditResult }: { matches: Match[], players: Player[], onEditResult?: (match: Match) => Promise<boolean> }) {
   const completedMatches = useMemo(() => matches.filter(m => m.status === 'completed'), [matches]);
 
   return (

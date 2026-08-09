@@ -5,7 +5,7 @@ import { validateMatchScoreInput } from '../lib/matchScoring';
 
 interface MatchFormProps {
   players: Player[];
-  onSubmit: (data: any) => void;
+  onSubmit: (data: any) => Promise<boolean | void>;
   initialData?: Match;
 }
 
@@ -20,14 +20,16 @@ export function MatchForm({ players, onSubmit, initialData }: MatchFormProps) {
   const [tieBreaker, setTieBreaker] = useState(initialData?.tieBreaker ? { t1: initialData.tieBreaker.team1, t2: initialData.tieBreaker.team2 } : { t1: 0, t2: 0 });
   const [showTieBreaker, setShowTieBreaker] = useState(!!initialData?.tieBreaker);
   const [error, setError] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
 
   const validation = useMemo(() => {
     const tie = showTieBreaker ? tieBreaker : undefined;
     return validateMatchScoreInput(sets, tie);
   }, [sets, showTieBreaker, tieBreaker]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!validation.ok) {
       setError(validation.message || 'Invalid score entered.');
       return;
@@ -42,7 +44,12 @@ export function MatchForm({ players, onSubmit, initialData }: MatchFormProps) {
     if (showTieBreaker) {
       data.tieBreaker = tieBreaker;
     }
-    onSubmit(data);
+    setSubmitting(true);
+    try {
+      await onSubmit(data);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -177,10 +184,10 @@ export function MatchForm({ players, onSubmit, initialData }: MatchFormProps) {
       <button 
         type="submit"
         className="w-full bg-primary text-white py-3 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 hover:bg-teal-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-        disabled={!validation.ok}
+        disabled={!validation.ok || submitting}
       >
         <Save className="w-5 h-5" />
-        Save Match
+        {submitting ? 'Saving...' : 'Save Match'}
       </button>
     </form>
   );

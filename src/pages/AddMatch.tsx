@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 interface AddMatchProps {
   matches: Match[];
   players: Player[];
-  onAddResult: (match: Match) => void;
+  onAddResult: (match: Match) => Promise<boolean>;
 }
 
 export function AddMatch({ matches, players, onAddResult }: AddMatchProps) {
@@ -25,7 +25,7 @@ export function AddMatch({ matches, players, onAddResult }: AddMatchProps) {
     );
   }
 
-  const handleSubmit = (data: any) => {
+  const handleSubmit = async (data: any) => {
       // Construct updated match object
       // Data from form: team1, team2, sets, tieBreaker (optional)
       const updatedMatch: Match = {
@@ -37,8 +37,10 @@ export function AddMatch({ matches, players, onAddResult }: AddMatchProps) {
           status: 'completed'
       };
 
-      onAddResult(updatedMatch);
-      navigate('/fixtures');
+      const saved = await onAddResult(updatedMatch);
+      if (saved) {
+        navigate('/fixtures');
+      }
   };
 
   return (

@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 interface MatchHistoryProps {
   matches: Match[];
   players: Player[];
-  onEditResult?: (match: Match) => void;
+  onEditResult?: (match: Match) => Promise<boolean>;
 }
 
 export function MatchHistory({ matches, players, onEditResult }: MatchHistoryProps) {
@@ -18,7 +18,7 @@ export function MatchHistory({ matches, players, onEditResult }: MatchHistoryPro
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
 
-  const handleSave = (data: any) => {
+  const handleSave = async (data: any) => {
       if (!editingMatch) return;
       
       const updatedMatch: Match = {
@@ -30,8 +30,10 @@ export function MatchHistory({ matches, players, onEditResult }: MatchHistoryPro
           // winner/status will be recalculated in App.tsx
       };
       
-      onEditResult?.(updatedMatch);
-      setEditingMatch(null);
+      const saved = await onEditResult?.(updatedMatch);
+      if (saved !== false) {
+        setEditingMatch(null);
+      }
   };
 
   return (
