@@ -38,7 +38,7 @@ export function LeagueTable({ players }: LeagueTableProps) {
     <div className="space-y-4">
       {/* Division Selector */}
       {divisions.length > 1 && (
-        <div className="flex flex-wrap p-1 bg-slate-100 rounded-xl w-fit gap-1">
+        <div className="flex flex-wrap p-1.5 bg-primary rounded-2xl w-fit gap-1 shadow-[0_12px_30px_-18px_rgba(0,0,0,0.45)]">
         {divisions.map(div => (
           <button
             key={div}
@@ -46,8 +46,8 @@ export function LeagueTable({ players }: LeagueTableProps) {
             className={cn(
               "px-3 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all",
               selectedDivision === div 
-                ? "bg-white text-primary shadow-sm" 
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-accent text-black shadow-sm" 
+                : "text-white/70 hover:text-white"
             )}
           >
             Division {div}
@@ -56,10 +56,19 @@ export function LeagueTable({ players }: LeagueTableProps) {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="brand-panel overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-black/5 bg-primary px-4 sm:px-5 py-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-accent font-black">Standings</div>
+            <div className="text-sm sm:text-base font-black text-white">Division {selectedDivision}</div>
+          </div>
+          <div className="text-[11px] sm:text-xs font-bold text-white/60">
+            Screenshot-ready view
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full table-fixed text-xs sm:text-sm text-left">
-            <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+            <thead className="bg-[#f7f5ec] text-slate-500 font-medium border-b border-black/5">
               <tr>
                 <th className="px-2 sm:px-4 py-3 w-8 sm:w-12 text-center">#</th>
                 <th className="px-2 sm:px-4 py-3 text-left font-bold text-slate-500 w-[38%] sm:w-auto">Player</th>
@@ -80,7 +89,7 @@ export function LeagueTable({ players }: LeagueTableProps) {
                     key={player.id}
                     className={cn(
                       "hover:bg-slate-50/50 transition-colors",
-                      isTop3 && "bg-gradient-to-r from-amber-50/10 to-transparent"
+                      isTop3 && "bg-gradient-to-r from-yellow-50/50 to-transparent"
                     )}
                   >
                     <td className="px-2 sm:px-4 py-3 text-center font-medium text-slate-400">
@@ -127,7 +136,7 @@ export function LeagueTable({ players }: LeagueTableProps) {
                     )}>
                         {(player.stats.gameDifference || 0) > 0 ? '+' : ''}{player.stats.gameDifference || 0}
                     </td>
-                    <td className="px-2 sm:px-4 py-3 text-center font-bold text-primary text-sm sm:text-base">{player.stats.points}</td>
+                    <td className="px-2 sm:px-4 py-3 text-center font-black text-primary text-sm sm:text-base">{player.stats.points}</td>
                   </tr>
                 );
               })}

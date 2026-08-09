@@ -75,26 +75,28 @@ export function Login() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 w-full max-w-sm">
+    <div className="flex flex-col items-center justify-center min-h-[70vh] px-4">
+      <div className="w-full max-w-sm rounded-[28px] bg-primary p-1 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.65)]">
+        <div className="bg-white p-8 rounded-[24px] border border-black/5">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-            <Lock className="w-8 h-8 text-primary" />
+          <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-4 text-black shadow-[0_10px_20px_-12px_rgba(0,0,0,0.5)]">
+            <Lock className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Access cørtapp</h1>
+          <div className="brand-kicker mb-3">Cort Club</div>
+          <h1 className="text-2xl font-black text-slate-950">Access cørtapp</h1>
           <p className="text-slate-500 text-center mt-2">
             Enter your credentials to manage the league
           </p>
         </div>
 
         {/* Mode Toggle */}
-        <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+        <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
           <button
             type="button"
             onClick={() => { setMode('password'); setError(''); setSuccess(''); }}
             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
               mode === 'password' 
-                ? 'bg-white text-slate-900 shadow-sm' 
+                ? 'bg-primary text-white shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -105,7 +107,7 @@ export function Login() {
             onClick={() => { setMode('magic-link'); setError(''); setSuccess(''); }}
             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
               mode === 'magic-link' 
-                ? 'bg-white text-slate-900 shadow-sm' 
+                ? 'bg-primary text-white shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -116,7 +118,7 @@ export function Login() {
             onClick={() => { setMode('signup'); setError(''); setSuccess(''); }}
             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
               mode === 'signup' 
-                ? 'bg-white text-slate-900 shadow-sm' 
+                ? 'bg-primary text-white shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -202,7 +204,7 @@ export function Login() {
           <button
             type="submit"
             disabled={mode === 'signup' ? (!email || !password) : !email}
-            className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-accent text-black py-3 rounded-xl font-black hover:bg-[#f4dc00] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {mode === 'password' ? 'Login' : 
              mode === 'signup' ? 'Create Account' : 
@@ -225,6 +227,7 @@ export function Login() {
             </button>
           )}
         </form>
+        </div>
       </div>
     </div>
   );

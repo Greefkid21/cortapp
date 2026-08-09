@@ -23,8 +23,8 @@ export function Layout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-primary">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
       </div>
     );
   }
@@ -64,12 +64,12 @@ export function Layout() {
   }, [settings?.league_name]);
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-900 pb-20">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 safe-top">
+    <div className="min-h-screen bg-background font-sans text-slate-900 pb-20">
+      <header className="bg-primary border-b border-white/10 sticky top-0 z-10 safe-top shadow-[0_12px_30px_-18px_rgba(0,0,0,0.7)]">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Logo className="h-8 sm:h-9 w-auto text-slate-900 flex-shrink-0" />
-            <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 truncate">
+            <Logo className="h-8 sm:h-9 w-auto text-accent flex-shrink-0" />
+            <h1 className="text-lg sm:text-xl font-black tracking-tight text-white truncate">
               {settings?.league_name || 'cørtapp'}
             </h1>
           </div>
@@ -77,7 +77,7 @@ export function Layout() {
           {user && !isAdmin && (
             <Link 
               to="/settings"
-              className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors"
+              className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
               title="Settings"
             >
               <Settings className="w-5 h-5" />
@@ -86,7 +86,7 @@ export function Layout() {
           {user ? (
             <button 
               onClick={logout}
-              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
               title="Logout"
             >
               <LogOut className="w-5 h-5" />
@@ -95,7 +95,7 @@ export function Layout() {
              <div className="flex gap-2">
                  <Link 
                   to="/login"
-                  className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors"
+                  className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
                   title="Login"
                 >
                   <Lock className="w-5 h-5" />
@@ -114,10 +114,10 @@ export function Layout() {
       {showMoreMenu && (
         <>
             <div 
-                className="fixed inset-0 bg-black/20 z-20 backdrop-blur-sm"
+                className="fixed inset-0 bg-black/40 z-20 backdrop-blur-sm"
                 onClick={() => setShowMoreMenu(false)}
             />
-            <div className="fixed bottom-24 right-4 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 min-w-[180px] flex flex-col gap-1 z-30 animate-in slide-in-from-bottom-5 fade-in duration-200">
+            <div className="fixed bottom-24 right-4 bg-primary rounded-2xl shadow-xl border border-white/10 p-2 min-w-[180px] flex flex-col gap-1 z-30 animate-in slide-in-from-bottom-5 fade-in duration-200">
                 {hiddenItems.map(({ path, label, icon: Icon }) => {
                     const isActive = location.pathname === path;
                     return (
@@ -128,8 +128,8 @@ export function Layout() {
                             className={cn(
                                 "flex items-center gap-3 p-3 rounded-xl transition-colors",
                                 isActive 
-                                    ? "bg-primary/10 text-primary font-medium" 
-                                    : "text-slate-600 hover:bg-slate-50"
+                                    ? "bg-accent text-black font-medium" 
+                                    : "text-white/80 hover:bg-white/5"
                             )}
                         >
                             <Icon className="w-5 h-5" />
@@ -142,7 +142,7 @@ export function Layout() {
       )}
 
       {/* Bottom Navigation for Mobile / Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 pb-safe z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-primary border-t border-white/10 px-2 py-2 pb-safe z-20 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.8)]">
         <div className="flex justify-around items-center max-w-3xl mx-auto">
           {visibleItems.map(({ path, label, icon: Icon }) => {
             const isActive = location.pathname === path;
@@ -156,12 +156,12 @@ export function Layout() {
                 className={cn(
                   "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors duration-200 relative min-w-[60px]",
                   isActive 
-                    ? "text-primary font-medium" 
-                    : "text-slate-400 hover:text-slate-600"
+                    ? "text-accent font-medium" 
+                    : "text-white/45 hover:text-white/80"
                 )}
               >
                 {isFixtures && totalUnread > 0 && (
-                  <span className="absolute top-1 right-3 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white z-10">
+                  <span className="absolute top-1 right-3 bg-accent text-black text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-primary z-10 font-bold">
                     {totalUnread > 9 ? '9+' : totalUnread}
                   </span>
                 )}
@@ -177,8 +177,8 @@ export function Layout() {
                 className={cn(
                   "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors duration-200 relative min-w-[60px]",
                   (isMoreActive || showMoreMenu)
-                    ? "text-primary font-medium" 
-                    : "text-slate-400 hover:text-slate-600"
+                    ? "text-accent font-medium" 
+                    : "text-white/45 hover:text-white/80"
                 )}
             >
                 {showMoreMenu ? (

@@ -7,10 +7,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: "#0D9488", // Teal 600
-        background: "#F8FAFC", // Slate 50
+        primary: "#0A0A0A", // Cort Club near-black
+        background: "#F5F2E8", // Warm off-white
         surface: "#FFFFFF",
-        accent: "#0F172A", // Slate 900
+        accent: "#FFE600", // Cort Club yellow
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

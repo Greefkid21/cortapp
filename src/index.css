@@ -3,7 +3,49 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    @apply bg-background;
+  }
+
   body {
     @apply bg-background text-slate-800 antialiased;
+    background-image:
+      radial-gradient(circle at top, rgba(255, 230, 0, 0.08), transparent 26rem),
+      linear-gradient(180deg, #fbfaf6 0%, #f5f2e8 100%);
+  }
+
+  ::selection {
+    background: #ffe600;
+    color: #0a0a0a;
+  }
+}
+
+@layer components {
+  .brand-panel {
+    @apply bg-white border border-black/5 rounded-2xl shadow-sm;
+  }
+
+  .brand-heading {
+    @apply text-slate-950 font-black tracking-tight;
+  }
+
+  .brand-subtle {
+    @apply text-slate-500;
+  }
+
+  .brand-kicker {
+    @apply inline-flex items-center gap-2 rounded-full bg-black px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-accent;
+  }
+
+  .brand-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+
+  .brand-button-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 font-bold text-black transition-colors hover:bg-[#f4dc00] disabled:opacity-60 disabled:cursor-not-allowed;
   }
 }
