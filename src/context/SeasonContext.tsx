@@ -6,10 +6,11 @@ interface SeasonContextType {
   currentSeasonName: string;
   currentSeasonStart: string;
   currentSeasonId: string | null;
+  currentSeasonDivisionCount: number;
   archives: SeasonArchive[];
-  archiveAndStart: (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[]) => Promise<void>;
+  archiveAndStart: (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[], divisionCount: number) => Promise<void>;
   deleteArchive: (id: string) => Promise<void>;
-  createDraftSeason: (name: string) => Promise<string | null>;
+  createDraftSeason: (name: string, divisionCount?: number) => Promise<string | null>;
   getDraftSeason: () => Promise<Season | null>;
   updateDraftSeason: (id: string, data: Partial<Season>) => Promise<void>;
   loading: boolean;
@@ -21,8 +22,15 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
   const [currentSeasonName, setCurrentSeasonName] = useState<string>('Season 1');
   const [currentSeasonStart, setCurrentSeasonStart] = useState<string>(new Date().toISOString().split('T')[0]);
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null);
+  const [currentSeasonDivisionCount, setCurrentSeasonDivisionCount] = useState<number>(2);
   const [archives, setArchives] = useState<SeasonArchive[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const getDivisionCountFromSeason = (season: { final_standings?: Season['final_standings'] } | null | undefined) => {
+    const raw = Number(season?.final_standings?.meta?.divisionCount ?? 2);
+    if (!Number.isFinite(raw) || raw < 1) return 2;
+    return Math.floor(raw);
+  };
 
   // Load seasons
   useEffect(() => {
@@ -40,6 +48,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
             setCurrentSeasonName(activeSeason.name);
             setCurrentSeasonStart(activeSeason.start_date);
             setCurrentSeasonId(activeSeason.id);
+            setCurrentSeasonDivisionCount(getDivisionCountFromSeason(activeSeason));
           } else {
             // No active season? Create one if none exists?
             // Or maybe this is the first run.
@@ -77,6 +86,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
             if (parsed && typeof parsed === 'object') {
               setCurrentSeasonName(parsed.currentSeasonName || 'Season 1');
               setCurrentSeasonStart(parsed.currentSeasonStart || new Date().toISOString().split('T')[0]);
+              setCurrentSeasonDivisionCount(parsed.currentSeasonDivisionCount || 2);
               setArchives(parsed.archives || []);
             }
           } catch {}
@@ -94,12 +104,15 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('cortapp_seasons', JSON.stringify({
         currentSeasonName,
         currentSeasonStart,
+        currentSeasonDivisionCount,
         archives
       }));
     }
-  }, [currentSeasonName, currentSeasonStart, archives]);
+  }, [currentSeasonName, currentSeasonStart, currentSeasonDivisionCount, archives]);
 
-  const archiveAndStart = async (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[]) => {
+  const archiveAndStart = async (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[], divisionCount: number) => {
+    const safeDivisionCount = Number.isFinite(divisionCount) && divisionCount > 0 ? Math.floor(divisionCount) : 1;
+
     if (supabase) {
       const now = new Date().toISOString().split('T')[0];
 
@@ -112,7 +125,10 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
             end_date: now,
             final_standings: {
               players: playersSnapshot,
-              matches: matchesSnapshot // Optional: might be too big, but fine for small league
+              matches: matchesSnapshot,
+              meta: {
+                divisionCount: currentSeasonDivisionCount
+              }
             }
           })
           .eq('id', currentSeasonId);
@@ -129,7 +145,12 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
         .insert([{
           name: newSeasonName,
           start_date: now,
-          is_active: true
+          is_active: true,
+          final_standings: {
+            meta: {
+              divisionCount: safeDivisionCount
+            }
+          }
         }])
         .select()
         .single();
@@ -148,6 +169,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
         setCurrentSeasonName(newSeason.name);
         setCurrentSeasonStart(newSeason.start_date);
         setCurrentSeasonId(newSeason.id);
+        setCurrentSeasonDivisionCount(safeDivisionCount);
         
         // Add to archives list
         const newArchive: SeasonArchive = {
@@ -174,6 +196,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
       setArchives(prev => [archive, ...prev]);
       setCurrentSeasonName(newSeasonName);
       setCurrentSeasonStart(new Date().toISOString().split('T')[0]);
+      setCurrentSeasonDivisionCount(safeDivisionCount);
     }
   };
 
@@ -194,7 +217,9 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     setArchives(prev => prev.filter(a => a.id !== id));
   };
 
-  const createDraftSeason = async (name: string): Promise<string | null> => {
+  const createDraftSeason = async (name: string, divisionCount: number = currentSeasonDivisionCount): Promise<string | null> => {
+    const safeDivisionCount = Number.isFinite(divisionCount) && divisionCount > 0 ? Math.floor(divisionCount) : 1;
+
     if (supabase) {
       const { data, error } = await supabase
         .from('seasons')
@@ -202,7 +227,12 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
           name,
           start_date: new Date().toISOString().split('T')[0],
           is_active: false,
-          is_draft: true
+          is_draft: true,
+          final_standings: {
+            meta: {
+              divisionCount: safeDivisionCount
+            }
+          }
         }])
         .select()
         .single();
@@ -264,6 +294,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     currentSeasonName,
     currentSeasonStart,
     currentSeasonId,
+    currentSeasonDivisionCount,
     archives,
     archiveAndStart,
     deleteArchive,
@@ -271,7 +302,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     getDraftSeason,
     updateDraftSeason,
     loading
-  }), [currentSeasonName, currentSeasonStart, currentSeasonId, archives, loading]);
+  }), [currentSeasonName, currentSeasonStart, currentSeasonId, currentSeasonDivisionCount, archives, loading]);
 
   return <SeasonContext.Provider value={value}>{children}</SeasonContext.Provider>;
 }

@@ -1,10 +1,22 @@
 import { useParams, Link } from 'react-router-dom';
 import { Player, Match } from '../types';
-import { Trophy, TrendingUp, ArrowLeft, Camera, Loader2, Calendar, HelpCircle } from 'lucide-react';
+import { Trophy, TrendingUp, ArrowLeft, Camera, Loader2, Calendar, HelpCircle, Plane, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
+import { useHolidays } from '../context/HolidayContext';
+
+function formatHolidayRange(startDate: string, endDate: string) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (startDate === endDate) {
+    return start.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  return `${start.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} - ${end.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
 
 interface PlayerProfileProps {
   players: Player[];
@@ -15,7 +27,12 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   const { id } = useParams<{ id: string }>();
   const player = players.find(p => p.id === id);
   const { user } = useAuth();
+  const { getPlayerHolidays, addHoliday, deleteHoliday, setupMessage } = useHolidays();
   const [uploading, setUploading] = useState(false);
+  const [holidayStart, setHolidayStart] = useState('');
+  const [holidayEnd, setHolidayEnd] = useState('');
+  const [holidayNote, setHolidayNote] = useState('');
+  const [savingHoliday, setSavingHoliday] = useState(false);
 
   const divisionPlayers = useMemo(() => {
     if (!player || player.in_league === false) return [];
@@ -137,6 +154,43 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   }, [completedMatches, player, players]);
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
+  const canManageHolidays = !!player && (user?.playerId === player.id || user?.role === 'admin');
+  const upcomingHolidays = useMemo(() => {
+    if (!player) return [];
+    const today = new Date().toISOString().split('T')[0];
+    return getPlayerHolidays(player.id).filter(holiday => holiday.endDate >= today);
+  }, [getPlayerHolidays, player]);
+
+  const handleAddHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!player || !holidayStart || !holidayEnd) return;
+    if (holidayEnd < holidayStart) {
+      alert('Holiday end date cannot be before the start date.');
+      return;
+    }
+
+    setSavingHoliday(true);
+    const success = await addHoliday(player.id, holidayStart, holidayEnd, holidayNote);
+    setSavingHoliday(false);
+
+    if (!success) {
+      alert('Failed to save holiday. Please check the holiday table setup and try again.');
+      return;
+    }
+
+    setHolidayStart('');
+    setHolidayEnd('');
+    setHolidayNote('');
+  };
+
+  const handleDeleteHoliday = async (holidayId?: string) => {
+    if (!holidayId) return;
+    if (!confirm('Delete this holiday entry?')) return;
+    const success = await deleteHoliday(holidayId);
+    if (!success) {
+      alert('Failed to delete holiday. Please try again.');
+    }
+  };
 
   if (!player) {
     return <div className="p-8 text-center">Player not found</div>;
@@ -286,6 +340,96 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
             </div>
           )) : (
             <p className="text-slate-500 text-sm italic">No upcoming matches scheduled.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+            <Plane className="w-5 h-5 text-primary" />
+            Upcoming Holidays
+          </h3>
+          <Link to="/holidays" className="text-sm font-bold text-primary hover:text-teal-700">
+            View Holiday Sheet
+          </Link>
+        </div>
+
+        {setupMessage && canManageHolidays && (
+          <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{setupMessage}</span>
+          </div>
+        )}
+
+        {canManageHolidays && (
+          <form onSubmit={handleAddHoliday} className="mb-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input
+              type="date"
+              value={holidayStart}
+              onChange={(e) => setHolidayStart(e.target.value)}
+              className="p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+              aria-label="Holiday start date"
+              required
+            />
+            <input
+              type="date"
+              value={holidayEnd}
+              onChange={(e) => setHolidayEnd(e.target.value)}
+              className="p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
+              aria-label="Holiday end date"
+              required
+            />
+            <button
+              type="submit"
+              disabled={savingHoliday}
+              className="px-4 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              {savingHoliday ? 'Saving...' : 'Add Holiday'}
+            </button>
+            <textarea
+              value={holidayNote}
+              onChange={(e) => setHolidayNote(e.target.value)}
+              placeholder="Optional note, e.g. family holiday"
+              className="sm:col-span-3 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none min-h-[84px]"
+            />
+          </form>
+        )}
+
+        <div className="space-y-3">
+          {upcomingHolidays.length > 0 ? upcomingHolidays.map((holiday) => {
+            const today = new Date().toISOString().split('T')[0];
+            const isCurrent = holiday.startDate <= today && holiday.endDate >= today;
+
+            return (
+              <div key={holiday.id || `${holiday.startDate}-${holiday.endDate}`} className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-800">{formatHolidayRange(holiday.startDate, holiday.endDate)}</span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${isCurrent ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                      {isCurrent ? 'Away Now' : 'Upcoming'}
+                    </span>
+                  </div>
+                  {holiday.note && (
+                    <div className="text-sm text-slate-600 italic mt-1">
+                      "{holiday.note}"
+                    </div>
+                  )}
+                </div>
+                {canManageHolidays && (
+                  <button
+                    onClick={() => handleDeleteHoliday(holiday.id)}
+                    className="self-start sm:self-auto p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete holiday"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            );
+          }) : (
+            <p className="text-slate-500 text-sm">No upcoming holidays added yet.</p>
           )}
         </div>
       </div>

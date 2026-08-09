@@ -6,13 +6,19 @@ import { Archive, CalendarDays, Trash2, ChevronRight, ArrowLeft } from 'lucide-r
 import { LeagueTable } from '../components/LeagueTable';
 import { MatchHistory } from '../components/MatchHistory';
 
-export function Seasons({ players, matches, onReset }: { players: Player[]; matches: Match[]; onReset: () => void }) {
-  const { currentSeasonName, currentSeasonStart, archives, archiveAndStart, deleteArchive, createDraftSeason, getDraftSeason, updateDraftSeason } = useSeason();
+export function Seasons({ players, matches, onReset }: { players: Player[]; matches: Match[]; onReset: (divisionCount: number) => Promise<void> }) {
+  const { currentSeasonName, currentSeasonStart, currentSeasonDivisionCount, archives, archiveAndStart, deleteArchive, createDraftSeason, getDraftSeason, updateDraftSeason } = useSeason();
   const { isAdmin } = useAuth();
   const [newSeasonName, setNewSeasonName] = useState('');
   const [selectedSeason, setSelectedSeason] = useState<SeasonArchive | null>(null);
   const [draftSeason, setDraftSeason] = useState<Season | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [newSeasonDivisionCount, setNewSeasonDivisionCount] = useState(currentSeasonDivisionCount);
+  const divisionOptions = [1, 2, 3, 4];
+
+  useEffect(() => {
+    setNewSeasonDivisionCount(draftSeason?.final_standings?.meta?.divisionCount || currentSeasonDivisionCount);
+  }, [draftSeason, currentSeasonDivisionCount]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -26,7 +32,7 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
 
   const handleStartPlanning = async () => {
     setIsPreparing(true);
-    const id = await createDraftSeason(`Next Season (Draft)`);
+    const id = await createDraftSeason(`Next Season (Draft)`, newSeasonDivisionCount);
     if (id) {
         const draft = await getDraftSeason();
         setDraftSeason(draft);
@@ -41,10 +47,11 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
     }
   };
 
-  const handleArchiveAndStart = () => {
-    const name = newSeasonName.trim() || `Season ${archives.length + 2}`;
-    archiveAndStart(name, players, matches);
-    onReset();
+  const handleArchiveAndStart = async () => {
+    const name = newSeasonName.trim() || draftSeason?.name?.trim() || `Season ${archives.length + 2}`;
+    const divisionCount = draftSeason?.final_standings?.meta?.divisionCount || newSeasonDivisionCount;
+    await archiveAndStart(name, players, matches, divisionCount);
+    await onReset(divisionCount);
     setNewSeasonName('');
   };
 
@@ -125,6 +132,28 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
                 placeholder="Season Name (e.g. Season 2)"
                 className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none"
               />
+              <select
+                value={draftSeason.final_standings?.meta?.divisionCount || newSeasonDivisionCount}
+                onChange={(e) => {
+                  const divisionCount = parseInt(e.target.value, 10);
+                  setDraftSeason({
+                    ...draftSeason,
+                    final_standings: {
+                      ...draftSeason.final_standings,
+                      meta: {
+                        ...draftSeason.final_standings?.meta,
+                        divisionCount
+                      }
+                    }
+                  });
+                  setNewSeasonDivisionCount(divisionCount);
+                }}
+                className="p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none font-medium"
+              >
+                {divisionOptions.map((count) => (
+                  <option key={count} value={count}>{count} {count === 1 ? 'Division' : 'Divisions'}</option>
+                ))}
+              </select>
               <button
                 onClick={handleSaveDraft}
                 className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 transition-colors"
@@ -138,9 +167,10 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
                     <strong>Divisions & Fixtures:</strong> To set up next season:
                 </p>
                 <ol className="text-xs text-amber-700 mt-2 list-decimal ml-4 space-y-1">
-                    <li>Go to the <strong>Players</strong> page and assign everyone to Division 1 or 2.</li>
+                    <li>Choose how many divisions next season uses, then save the draft.</li>
+                    <li>Go to the <strong>Players</strong> page and assign everyone to the available division slots.</li>
                     <li>Come back here when the current season ends to "Archive & Start New".</li>
-                    <li>The new season will automatically respect the divisions you've set!</li>
+                    <li>The new season will automatically respect the division count you've set.</li>
                 </ol>
             </div>
           </div>
@@ -163,6 +193,15 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
             placeholder="New season name (e.g. Spring 2026)"
             className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
           />
+          <select
+            value={newSeasonDivisionCount}
+            onChange={(e) => setNewSeasonDivisionCount(parseInt(e.target.value, 10))}
+            className="p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-medium"
+          >
+            {divisionOptions.map((count) => (
+              <option key={count} value={count}>{count} {count === 1 ? 'Division' : 'Divisions'}</option>
+            ))}
+          </select>
           <button
             onClick={handleArchiveAndStart}
             className="px-4 py-3 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 flex items-center gap-2"
@@ -171,7 +210,7 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
           </button>
         </div>
         <div className="text-xs text-slate-500">
-          Archiving preserves all player stats and matches from the current season and resets the table for the new season.
+          Archiving preserves all player stats and matches from the current season, resets the table, and switches the new season to {newSeasonDivisionCount} {newSeasonDivisionCount === 1 ? 'division' : 'divisions'}.
         </div>
       </div>
 

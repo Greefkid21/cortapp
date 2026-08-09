@@ -27,8 +27,11 @@ export interface Season {
   is_active: boolean;
   is_draft?: boolean;
   final_standings?: {
-    players: Player[];
-    matches: Match[];
+    players?: Player[];
+    matches?: Match[];
+    meta?: {
+      divisionCount?: number;
+    };
   };
 }
 
@@ -91,6 +94,15 @@ export interface PlayerAvailability {
   daysAvailable: string[]; // ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
   note?: string;
   updatedAt?: string;
+}
+
+export interface PlayerHoliday {
+  id?: string;
+  playerId: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  note?: string;
+  createdAt?: string;
 }
 
 export interface Rule {

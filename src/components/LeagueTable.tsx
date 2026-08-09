@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Player } from '../types';
 import { cn } from '../lib/utils';
 import { Medal } from 'lucide-react';
@@ -9,7 +9,21 @@ interface LeagueTableProps {
 }
 
 export function LeagueTable({ players }: LeagueTableProps) {
-  const [selectedDivision, setSelectedDivision] = useState<number>(1);
+  const divisions = useMemo(() => {
+    const uniqueDivisions = Array.from(
+      new Set(players.filter(p => p.in_league !== false).map(p => p.division || 1))
+    ).sort((a, b) => a - b);
+
+    return uniqueDivisions.length > 0 ? uniqueDivisions : [1];
+  }, [players]);
+
+  const [selectedDivision, setSelectedDivision] = useState<number>(divisions[0]);
+
+  useEffect(() => {
+    if (!divisions.includes(selectedDivision)) {
+      setSelectedDivision(divisions[0]);
+    }
+  }, [divisions, selectedDivision]);
   
   // Filter players by division
   const divisionPlayers = players.filter(p => (p.in_league !== false) && (p.division || 1) === selectedDivision);
@@ -23,8 +37,9 @@ export function LeagueTable({ players }: LeagueTableProps) {
   return (
     <div className="space-y-4">
       {/* Division Selector */}
-      <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
-        {[1, 2].map(div => (
+      {divisions.length > 1 && (
+        <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
+        {divisions.map(div => (
           <button
             key={div}
             onClick={() => setSelectedDivision(div)}
@@ -38,7 +53,8 @@ export function LeagueTable({ players }: LeagueTableProps) {
             Division {div}
           </button>
         ))}
-      </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">

@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Player } from '../types';
 import { User, Edit2, Plus, Upload, X, Save, Trash2, Check, HelpCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAvailability } from '../context/AvailabilityContext';
+import { useSeason } from '../context/SeasonContext';
 import { getNextWeekStartDate } from '../lib/utils';
 import { Link } from 'react-router-dom';
 
@@ -16,6 +17,7 @@ interface PlayersPageProps {
 export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlayer }: PlayersPageProps) {
   const { isAdmin } = useAuth();
   const { getAvailability } = useAvailability();
+  const { currentSeasonDivisionCount } = useSeason();
   const nextWeekStart = getNextWeekStartDate();
   const [isEditing, setIsEditing] = useState<string | null>(null); // 'new' or player ID
   const [editName, setEditName] = useState('');
@@ -25,6 +27,13 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
   const [editInLeague, setEditInLeague] = useState<boolean>(true);
   const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const availableDivisions = Array.from({ length: currentSeasonDivisionCount }, (_, i) => i + 1);
+
+  useEffect(() => {
+    if (editInLeague && editDivision > currentSeasonDivisionCount) {
+      setEditDivision(1);
+    }
+  }, [editDivision, editInLeague, currentSeasonDivisionCount]);
 
   const startNew = () => {
     setEditName('');
@@ -40,7 +49,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
     setEditName(player.name);
     setEditEmail(''); // Don't allow editing email for existing players here yet
     setEditSeed(player.seed);
-    setEditDivision(player.division || 1);
+    setEditDivision(Math.min(player.division || 1, currentSeasonDivisionCount));
     setEditInLeague(player.in_league !== false);
     setEditAvatar(player.avatar);
     setIsEditing(player.id);
@@ -179,8 +188,11 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
                     }}
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                   >
-                    <option value="1">Division 1</option>
-                    <option value="2">Division 2</option>
+                    {availableDivisions.map((division) => (
+                      <option key={division} value={division}>
+                        Division {division}
+                      </option>
+                    ))}
                     <option value="none">No League</option>
                   </select>
                 </div>

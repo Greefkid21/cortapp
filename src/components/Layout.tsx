@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useMemo, useState, useEffect } from 'react';
-import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText, Medal } from 'lucide-react';
+import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText, Medal, Plane } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -34,6 +34,7 @@ export function Layout() {
         { path: '/', label: 'League', icon: Trophy },
         { path: '/competitions', label: 'Comps', icon: Medal },
         { path: '/fixtures', label: 'Fixtures', icon: Calendar },
+        { path: '/holidays', label: 'Holidays', icon: Plane },
         { path: '/rules', label: 'Rules', icon: FileText },
         { path: '/settings', label: 'Settings', icon: Settings },
     ] : []),

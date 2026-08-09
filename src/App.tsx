@@ -20,11 +20,13 @@ import { PlayerProfile } from './pages/PlayerProfile';
 import { Rules } from './pages/Rules';
 import { Competitions } from './pages/Competitions';
 import { CompetitionDetail } from './pages/CompetitionDetail';
+import { Holidays } from './pages/Holidays';
 import { Match, Player } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
 import { generateSchedule } from './lib/scheduler';
 import { calculateMatchStats, validateMatchScoreInput } from './lib/matchScoring';
+import { HolidayProvider } from './context/HolidayContext';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -356,7 +358,9 @@ function MainApp() {
     alert('Fixtures generated!');
   };
 
-  const handleResetForNewSeason = async () => {
+  const handleResetForNewSeason = async (divisionCount: number) => {
+    const safeDivisionCount = Number.isFinite(divisionCount) && divisionCount > 0 ? Math.floor(divisionCount) : 1;
+
     if (supabase) {
         // Reset all player stats to 0
         const zeroStats = {
@@ -369,22 +373,25 @@ function MainApp() {
         // We can loop or use a broader query.
         // update players set ... where id in (all ids)
         // Or better, just loop for now.
-        const { data: allPlayers } = await supabase.from('players').select('id');
+        const { data: allPlayers } = await supabase.from('players').select('id, division');
         if (allPlayers) {
             for (const p of allPlayers) {
-                await supabase.from('players').update(zeroStats).eq('id', p.id);
+                const normalizedDivision = Math.min(Math.max(p.division || 1, 1), safeDivisionCount);
+                await supabase.from('players').update({ ...zeroStats, division: normalizedDivision }).eq('id', p.id);
             }
         }
         
         setMatches([]); // Clear local matches
         setPlayers(prev => prev.map(p => ({
             ...p,
+            division: Math.min(Math.max(p.division || 1, 1), safeDivisionCount),
             stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
         })));
     } else {
         setMatches([]);
         setPlayers(prev => prev.map(p => ({
             ...p,
+            division: Math.min(Math.max(p.division || 1, 1), safeDivisionCount),
             stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
         })));
     }
@@ -526,6 +533,7 @@ function MainApp() {
         <Route path="competitions" element={<RequireAuth><Competitions players={players} /></RequireAuth>} />
         <Route path="competitions/:id" element={<RequireAuth><CompetitionDetail players={players} /></RequireAuth>} />
         <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} onGenerateFixtures={handleGenerateFixtures} /></RequireAuth>} />
+        <Route path="holidays" element={<RequireAuth><Holidays players={players} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
         <Route path="rules" element={<RequireAuth><Rules /></RequireAuth>} />
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
@@ -549,9 +557,11 @@ function App() {
         <SeasonProvider>
           <ChatProvider>
             <AvailabilityProvider>
-              <BrowserRouter>
-                 <MainApp />
-              </BrowserRouter>
+              <HolidayProvider>
+                <BrowserRouter>
+                   <MainApp />
+                </BrowserRouter>
+              </HolidayProvider>
             </AvailabilityProvider>
           </ChatProvider>
         </SeasonProvider>

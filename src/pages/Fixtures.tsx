@@ -33,6 +33,10 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
   const [generating, setGenerating] = useState(false);
   
   const leaguePlayers = useMemo(() => players.filter(p => p.in_league !== false), [players]);
+  const divisionKeys = useMemo(() => {
+    const uniqueDivisions = Array.from(new Set(leaguePlayers.map(p => p.division || 1))).sort((a, b) => a - b);
+    return uniqueDivisions.length > 0 ? uniqueDivisions : [1];
+  }, [leaguePlayers]);
   const scheduledMatches = matches
     .filter(m => m.status !== 'completed')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -128,7 +132,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                             return acc;
                           }, {} as Record<string, Match[]>);
 
-                          const order: Array<number | 'mixed'> = [1, 2, 'mixed'];
+                          const order: Array<number | 'mixed'> = [...divisionKeys, 'mixed'];
                           const sections = order.filter(k => (grouped[String(k)] || []).length > 0);
 
                           const renderMatch = (match: Match) => {
@@ -418,7 +422,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
 
             <div className="space-y-4">
               <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 font-medium">
-                This creates weekly fixtures for Division 1 and Division 2 using the partner-rotation scheduler.
+                This creates weekly fixtures for {divisionKeys.length === 1 ? 'Division 1' : 'each active division'} using the partner-rotation scheduler.
                 Each division must have a player count divisible by 4.
               </div>
 
