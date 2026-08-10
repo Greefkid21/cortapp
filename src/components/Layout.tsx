@@ -21,6 +21,13 @@ export function Layout() {
       return uniqueMatchIds.reduce((sum, id) => sum + getUnreadCount(id), 0);
   }, [messages, getUnreadCount]);
 
+  // Update page title dynamically
+  useEffect(() => {
+    if (settings?.league_name) {
+      document.title = `${settings.league_name} - Padel League`;
+    }
+  }, [settings?.league_name]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-primary">
@@ -55,13 +62,6 @@ export function Layout() {
   const hiddenItems = needsMoreMenu ? navItems.slice(MAX_VISIBLE_ITEMS) : [];
   
   const isMoreActive = hiddenItems.some(item => item.path === location.pathname);
-
-  // Update page title dynamically
-  useEffect(() => {
-    if (settings?.league_name) {
-      document.title = `${settings.league_name} - Padel League`;
-    }
-  }, [settings?.league_name]);
 
   return (
     <div className="min-h-screen bg-background font-sans text-slate-900 pb-20">
