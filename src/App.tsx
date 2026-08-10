@@ -46,6 +46,35 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   return children;
 }
 
+function RequireActualAdmin({ children }: { children: JSX.Element }) {
+  const { actualIsAdmin, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!actualIsAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+function ViewerPreviewLayout() {
+  const { setViewerPreview } = useAuth();
+
+  useEffect(() => {
+    setViewerPreview(true);
+    return () => setViewerPreview(false);
+  }, [setViewerPreview]);
+
+  return <Layout />;
+}
+
 function MainApp() {
   const { inviteUser, users } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -527,7 +556,7 @@ function MainApp() {
 
   return (
     <Routes>
-        <Route path="/" element={<Layout />}>
+      <Route path="/" element={<Layout />}>
         {/* Public Route */}
         <Route path="login" element={<Login />} />
 
@@ -542,13 +571,34 @@ function MainApp() {
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
         <Route path="chat" element={<RequireAuth><Chat matches={matches} players={players} /></RequireAuth>} />
         <Route path="add-match" element={<RequireAuth><AddMatch matches={matches} players={players} onAddResult={handleEditMatchResult} /></RequireAuth>} />
-        
-        {/* Admin Routes (already guarded by UI but good to add check) */}
+
+        {/* Admin Routes */}
         <Route path="players" element={<RequireAuth><PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} onDeletePlayer={handleDeletePlayer} /></RequireAuth>} />
         <Route path="history" element={<RequireAuth><HistoryPage matches={matches} players={players} onEditResult={handleEditMatchResult} /></RequireAuth>} />
         <Route path="users" element={<RequireAuth><UsersPage players={players} /></RequireAuth>} />
         <Route path="seasons" element={<RequireAuth><Seasons players={players} matches={matches} onReset={handleResetForNewSeason} /></RequireAuth>} />
-        </Route>
+      </Route>
+
+      <Route
+        path="/viewer"
+        element={
+          <RequireAuth>
+            <RequireActualAdmin>
+              <ViewerPreviewLayout />
+            </RequireActualAdmin>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<Home players={players} matches={matches} />} />
+        <Route path="competitions" element={<Competitions players={players} />} />
+        <Route path="competitions/:id" element={<CompetitionDetail players={players} />} />
+        <Route path="fixtures" element={<Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} onGenerateFixtures={handleGenerateFixtures} />} />
+        <Route path="holidays" element={<Holidays players={players} />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="rules" element={<Rules />} />
+        <Route path="player/:id" element={<PlayerProfile players={players} matches={matches} />} />
+        <Route path="chat" element={<Chat matches={matches} players={players} />} />
+      </Route>
     </Routes>
   );
 }

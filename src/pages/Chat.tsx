@@ -12,7 +12,7 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
   const [params] = useSearchParams();
   const matchId = params.get('matchId') || '';
   const { getThread, sendMessage, editMessage, deleteMessage, markAsRead, messages } = useChat();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, buildPath } = useAuth();
   const { getAvailability } = useAvailability();
   const [text, setText] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -93,7 +93,7 @@ export function Chat({ matches, players }: { matches: Match[]; players: Player[]
           <h2 className="text-2xl font-bold text-slate-900">Match Chat</h2>
         </div>
         <Link 
-          to="/fixtures" 
+          to={buildPath('/fixtures')} 
           className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-primary transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />

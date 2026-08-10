@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useMemo, useState, useEffect } from 'react';
-import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText, Medal, Plane } from 'lucide-react';
+import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText, Medal, Plane, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -9,7 +9,7 @@ import { Logo } from './Logo';
 
 export function Layout() {
   const location = useLocation();
-  const { user, isAdmin, logout, loading } = useAuth();
+  const { user, isAdmin, actualIsAdmin, viewerPreview, buildPath, logout, loading } = useAuth();
   const { settings } = useSettings();
   const { messages, getUnreadCount } = useChat();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -38,14 +38,15 @@ export function Layout() {
 
   const navItems = [
     ...(user ? [
-        { path: '/', label: 'League', icon: Trophy },
-        { path: '/competitions', label: 'Comps', icon: Medal },
-        { path: '/fixtures', label: 'Fixtures', icon: Calendar },
-        { path: '/holidays', label: 'Holidays', icon: Plane },
-        { path: '/rules', label: 'Rules', icon: FileText },
-        { path: '/settings', label: 'Settings', icon: Settings },
+        { path: buildPath('/'), label: 'League', icon: Trophy },
+        { path: buildPath('/competitions'), label: 'Comps', icon: Medal },
+        { path: buildPath('/fixtures'), label: 'Fixtures', icon: Calendar },
+        { path: buildPath('/holidays'), label: 'Holidays', icon: Plane },
+        { path: buildPath('/rules'), label: 'Rules', icon: FileText },
+        { path: buildPath('/settings'), label: 'Settings', icon: Settings },
     ] : []),
     ...(isAdmin ? [
+        { path: '/viewer', label: 'Viewer', icon: Eye },
         { path: '/users', label: 'Admin', icon: Shield },
         { path: '/players', label: 'Players', icon: Users },
         { path: '/history', label: 'History', icon: History },
@@ -69,28 +70,46 @@ export function Layout() {
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Logo className="h-8 sm:h-9 w-auto text-accent flex-shrink-0" />
-            <h1 className="text-lg sm:text-xl font-black tracking-tight text-white truncate">
-              {settings?.league_name || 'cørtapp'}
-            </h1>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white truncate">
+                {settings?.league_name || 'cørtapp'}
+              </h1>
+              {viewerPreview && (
+                <div className="text-[10px] uppercase tracking-[0.18em] text-accent/80 font-black">
+                  Viewer Preview
+                </div>
+              )}
+            </div>
           </div>
           
-          {user && !isAdmin && (
-            <Link 
-              to="/settings"
-              className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
-              title="Settings"
-            >
-              <Settings className="w-5 h-5" />
-            </Link>
-          )}
           {user ? (
-            <button 
-              onClick={logout}
-              className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1 sm:gap-2">
+              {viewerPreview && actualIsAdmin && (
+                <Link
+                  to="/"
+                  className="px-3 py-2 text-xs sm:text-sm font-bold text-accent hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  title="Return to Admin View"
+                >
+                  Admin View
+                </Link>
+              )}
+              {!isAdmin && (
+                <Link 
+                  to={buildPath('/settings')}
+                  className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
+                  title="Settings"
+                >
+                  <Settings className="w-5 h-5" />
+                </Link>
+              )}
+              <button 
+                onClick={logout}
+                className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           ) : (
              <div className="flex gap-2">
                  <Link 

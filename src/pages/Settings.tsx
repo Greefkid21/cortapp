@@ -9,7 +9,7 @@ import { getCroppedImg } from '../lib/imageUtils';
 
 export function Settings() {
   const { settings, updateSettings } = useSettings();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -205,7 +205,7 @@ export function Settings() {
         </form>
       </div>
 
-      {user?.role === 'admin' && (
+      {isAdmin && (
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
              <SettingsIcon className="w-5 h-5" /> League Rules

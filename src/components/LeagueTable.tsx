@@ -3,12 +3,14 @@ import { Player } from '../types';
 import { cn } from '../lib/utils';
 import { Medal } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 interface LeagueTableProps {
   players: Player[];
 }
 
 export function LeagueTable({ players }: LeagueTableProps) {
+  const { buildPath } = useAuth();
   const divisions = useMemo(() => {
     const uniqueDivisions = Array.from(
       new Set(players.filter(p => p.in_league !== false).map(p => p.division || 1))
@@ -97,7 +99,7 @@ export function LeagueTable({ players }: LeagueTableProps) {
                     </td>
                     <td className="p-0 relative">
                       <Link 
-                        to={`/player/${player.id}`} 
+                        to={buildPath(`/player/${player.id}`)} 
                         className="flex items-center gap-2 sm:gap-3 hover:bg-slate-50 transition-colors w-full h-full px-2 sm:px-4 py-3 min-w-0"
                       >
                         <div className={cn(

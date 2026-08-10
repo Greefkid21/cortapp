@@ -6,6 +6,8 @@ import { sendEmailNotification } from '../lib/notifications';
 interface AuthContextType {
   user: AppUser | null;
   isAdmin: boolean;
+  actualIsAdmin: boolean;
+  viewerPreview: boolean;
   users: AppUser[];
   login: (email: string, password?: string) => Promise<boolean>;
   signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -18,6 +20,8 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<boolean>;
   refreshUsers: () => Promise<number>;
   checkUserDbValue: (id: string) => Promise<any>;
+  setViewerPreview: (enabled: boolean) => void;
+  buildPath: (path: string) => string;
   loading: boolean;
 }
 
@@ -27,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewerPreview, setViewerPreview] = useState(false);
 
   // Define fetchUsers outside useEffect so it can be exposed
   const fetchUsers = async () => {
@@ -642,7 +647,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
-  const isAdmin = user?.role === 'admin';
+  const actualIsAdmin = user?.role === 'admin';
+  const isAdmin = actualIsAdmin && !viewerPreview;
+
+  const buildPath = (path: string) => {
+    if (!path.startsWith('/')) return path;
+    if (!viewerPreview) return path;
+    if (path === '/viewer' || path.startsWith('/viewer/')) return path;
+    return `/viewer${path}`;
+  };
 
   const checkUserDbValue = async (id: string) => {
     if (!supabase) return null;
@@ -655,7 +668,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, checkUserDbValue, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, actualIsAdmin, viewerPreview, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, checkUserDbValue, setViewerPreview, buildPath, loading }}>
       {children}
     </AuthContext.Provider>
   );

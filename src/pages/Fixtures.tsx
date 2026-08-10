@@ -17,7 +17,7 @@ interface FixturesProps {
 
 export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }: FixturesProps) {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, buildPath } = useAuth();
   const { getAvailability } = useAvailability();
   const { getUnreadCount } = useChat();
   
@@ -184,7 +184,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                                   <div className="flex items-center gap-3 ml-auto">
                                     {(isAdmin) && (
                                       <button 
-                                        onClick={() => navigate(`/add-match?matchId=${match.id}`)}
+                                        onClick={() => navigate(buildPath(`/add-match?matchId=${match.id}`))}
                                         className="flex items-center gap-1 text-primary font-bold hover:text-black p-1"
                                         title="Record Result"
                                       >
@@ -203,7 +203,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                                       </button>
                                     )}
                                     <button 
-                                      onClick={() => navigate(`/chat?matchId=${match.id}`)}
+                                      onClick={() => navigate(buildPath(`/chat?matchId=${match.id}`))}
                                       className="flex items-center gap-1 text-slate-600 font-bold hover:text-slate-900 relative p-1"
                                       title="Match Chat"
                                     >
@@ -224,7 +224,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                                       const status = getPlayerStatus(pid);
                                       return (
                                         <div key={pid} className="flex items-center gap-1.5">
-                                          <Link to={`/player/${pid}`} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
+                                          <Link to={buildPath(`/player/${pid}`)} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
                                           {status !== 'unknown' && (
                                             <div title={status === 'yes' ? 'Available' : 'Unavailable'} className={status === 'yes' ? 'text-green-500' : 'text-red-500'}>
                                               {status === 'yes' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
@@ -243,7 +243,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                                       const status = getPlayerStatus(pid);
                                       return (
                                         <div key={pid} className="flex items-center gap-1.5 flex-row-reverse">
-                                          <Link to={`/player/${pid}`} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
+                                          <Link to={buildPath(`/player/${pid}`)} className="text-sm font-medium hover:underline truncate">{getPlayerName(pid)}</Link>
                                           {status !== 'unknown' && (
                                             <div title={status === 'yes' ? 'Available' : 'Unavailable'} className={status === 'yes' ? 'text-green-500' : 'text-red-500'}>
                                               {status === 'yes' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}

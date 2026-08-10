@@ -10,7 +10,7 @@ import { generateNextCompetitionRound } from '../lib/competitionScheduler';
 export function CompetitionDetail({ players }: { players: Player[] }) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, buildPath } = useAuth();
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [matches, setMatches] = useState<CompetitionMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,7 +238,7 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
       if (!supabase || !id) return;
       const { error } = await supabase.from('competitions').delete().eq('id', id);
       if (error) throw error;
-      navigate('/competitions');
+      navigate(buildPath('/competitions'));
     } catch (error: any) {
       alert('Error deleting tournament: ' + error.message);
     }
@@ -259,14 +259,14 @@ export function CompetitionDetail({ players }: { players: Player[] }) {
     return (
       <div className="p-8 text-center space-y-4">
         <p className="text-slate-500 font-bold">Tournament not found.</p>
-        <Link to="/competitions" className="text-primary font-black hover:underline">Back to List</Link>
+        <Link to={buildPath('/competitions')} className="text-primary font-black hover:underline">Back to List</Link>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Link to="/competitions" className="inline-flex items-center text-slate-500 hover:text-slate-800 transition-colors font-bold">
+      <Link to={buildPath('/competitions')} className="inline-flex items-center text-slate-500 hover:text-slate-800 transition-colors font-bold">
         <ArrowLeft className="w-4 h-4 mr-1" /> Back to Competitions
       </Link>
 

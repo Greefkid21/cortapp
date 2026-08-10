@@ -18,6 +18,7 @@ function formatHolidayRange(startDate: string, endDate: string) {
 
 export function Holidays({ players }: { players: Player[] }) {
   const { user } = useAuth();
+  const { buildPath } = useAuth();
   const { holidays, loading, setupMessage } = useHolidays();
 
   const upcomingHolidays = useMemo(() => {
@@ -53,7 +54,7 @@ export function Holidays({ players }: { players: Player[] }) {
           </div>
           {user?.playerId && (
             <Link
-              to={`/player/${user.playerId}`}
+              to={buildPath(`/player/${user.playerId}`)}
               className="brand-button-accent whitespace-nowrap"
             >
               Manage Mine

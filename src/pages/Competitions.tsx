@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 
 export function Competitions({ players }: { players: Player[] }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, buildPath } = useAuth();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -125,7 +125,7 @@ export function Competitions({ players }: { players: Player[] }) {
           competitions.map(comp => (
             <Link
               key={comp.id}
-              to={`/competitions/${comp.id}`}
+              to={buildPath(`/competitions/${comp.id}`)}
               className="group bg-white p-6 rounded-3xl border border-slate-100 hover:border-primary/30 transition-all shadow-sm hover:shadow-xl flex items-center justify-between"
             >
               <div className="space-y-2">

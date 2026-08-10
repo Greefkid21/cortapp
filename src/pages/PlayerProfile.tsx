@@ -26,7 +26,7 @@ interface PlayerProfileProps {
 export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   const { id } = useParams<{ id: string }>();
   const player = players.find(p => p.id === id);
-  const { user } = useAuth();
+  const { user, isAdmin, buildPath } = useAuth();
   const { getPlayerHolidays, addHoliday, deleteHoliday, setupMessage } = useHolidays();
   const [uploading, setUploading] = useState(false);
   const [holidayStart, setHolidayStart] = useState('');
@@ -154,7 +154,7 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   }, [completedMatches, player, players]);
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
-  const canManageHolidays = !!player && (user?.playerId === player.id || user?.role === 'admin');
+  const canManageHolidays = !!player && (user?.playerId === player.id || isAdmin);
   const upcomingHolidays = useMemo(() => {
     if (!player) return [];
     const today = new Date().toISOString().split('T')[0];
@@ -198,7 +198,7 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      <Link to="/" className="inline-flex items-center text-slate-500 hover:text-primary transition-colors font-medium">
+      <Link to={buildPath('/')} className="inline-flex items-center text-slate-500 hover:text-primary transition-colors font-medium">
         <ArrowLeft className="w-4 h-4 mr-1" /> Back to League
       </Link>
 
@@ -351,7 +351,7 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
             <Plane className="w-5 h-5 text-primary" />
             Upcoming Holidays
           </h3>
-          <Link to="/holidays" className="text-sm font-bold text-primary hover:text-black">
+          <Link to={buildPath('/holidays')} className="text-sm font-bold text-primary hover:text-black">
             View Holiday Sheet
           </Link>
         </div>
@@ -461,8 +461,8 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
                 <div className="flex justify-between items-center">
                   {/* Team 1 */}
                   <div className={cn("flex-1 flex flex-col gap-1", match.winner === 'team1' && "font-bold text-slate-900")}>
-                    <Link to={`/player/${match.team1[0]}`} className="text-sm hover:underline">{getPlayerName(match.team1[0])}</Link>
-                    <Link to={`/player/${match.team1[1]}`} className="text-sm hover:underline">{getPlayerName(match.team1[1])}</Link>
+                    <Link to={buildPath(`/player/${match.team1[0]}`)} className="text-sm hover:underline">{getPlayerName(match.team1[0])}</Link>
+                    <Link to={buildPath(`/player/${match.team1[1]}`)} className="text-sm hover:underline">{getPlayerName(match.team1[1])}</Link>
                   </div>
 
                   {/* Score */}
@@ -474,8 +474,8 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
 
                   {/* Team 2 */}
                   <div className={cn("flex-1 flex flex-col gap-1 text-right", match.winner === 'team2' && "font-bold text-slate-900")}>
-                    <Link to={`/player/${match.team2[0]}`} className="text-sm hover:underline">{getPlayerName(match.team2[0])}</Link>
-                    <Link to={`/player/${match.team2[1]}`} className="text-sm hover:underline">{getPlayerName(match.team2[1])}</Link>
+                    <Link to={buildPath(`/player/${match.team2[0]}`)} className="text-sm hover:underline">{getPlayerName(match.team2[0])}</Link>
+                    <Link to={buildPath(`/player/${match.team2[1]}`)} className="text-sm hover:underline">{getPlayerName(match.team2[1])}</Link>
                   </div>
                 </div>
               </div>

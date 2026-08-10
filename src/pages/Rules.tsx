@@ -20,8 +20,7 @@ const INITIAL_RULES = [
 ];
 
 export function Rules() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const { isAdmin } = useAuth();
   
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
