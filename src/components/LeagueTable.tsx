@@ -71,13 +71,13 @@ export function LeagueTable({ players }: LeagueTableProps) {
             <thead className="bg-[#f7f5ec] text-slate-500 font-medium border-b border-black/5">
               <tr>
                 <th className="px-2 sm:px-4 py-3 w-8 sm:w-12 text-center">#</th>
-                <th className="px-2 sm:px-4 py-3 text-left font-bold text-slate-500 w-[38%] sm:w-auto">Player</th>
-                <th className="px-1 sm:px-4 py-3 text-center font-bold text-slate-500 w-8 sm:w-auto">P</th>
-                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-auto">W</th>
-                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-auto">D</th>
-                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-auto">L</th>
-                <th className="px-1 sm:px-4 py-3 text-center w-10 sm:w-auto">+/-</th>
-                <th className="px-2 sm:px-4 py-3 text-center font-bold text-slate-700 w-10 sm:w-auto">Pts</th>
+                <th className="px-2 sm:px-4 py-3 text-left font-bold text-slate-500 w-[38%] sm:w-[42%]">Player</th>
+                <th className="px-1 sm:px-4 py-3 text-center font-bold text-slate-500 w-8 sm:w-14">P</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-14">W</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-14">D</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-8 sm:w-14">L</th>
+                <th className="px-1 sm:px-4 py-3 text-center w-10 sm:w-16">+/-</th>
+                <th className="px-2 sm:px-4 py-3 text-center font-bold text-slate-700 w-10 sm:w-16">Pts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -118,8 +118,8 @@ export function LeagueTable({ players }: LeagueTableProps) {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
-                            <span className={cn("font-medium truncate", index === 0 ? "text-slate-900 font-bold" : "text-slate-700")}>
+                        <div className="flex flex-1 items-center gap-1 sm:gap-2 min-w-0">
+                            <span className={cn("block flex-1 truncate font-medium", index === 0 ? "text-slate-900 font-bold" : "text-slate-700")}>
                                 {player.name}
                             </span>
                             {index === 0 && <Medal className="hidden sm:block w-4 h-4 text-yellow-400 fill-yellow-400 flex-shrink-0" />}
