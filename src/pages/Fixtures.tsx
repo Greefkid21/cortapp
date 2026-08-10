@@ -81,23 +81,26 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-            <h2 className="text-2xl font-bold text-slate-900">Upcoming Fixtures</h2>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                <MessageSquare className="w-3 h-3" /> Check Match Chat for detailed player availability
-            </p>
+      <div className="brand-panel p-6 sm:p-7">
+        <div className="flex justify-between items-center gap-4">
+          <div>
+              <div className="brand-kicker mb-3">Matchday</div>
+              <h2 className="brand-heading text-3xl sm:text-4xl">Upcoming Fixtures</h2>
+              <p className="text-sm text-slate-500 mt-2 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-primary" /> Check Match Chat for detailed player availability
+              </p>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => setShowGenerate(true)}
+              className="brand-button-accent whitespace-nowrap"
+              title="Generate Fixtures"
+            >
+              <Sparkles className="w-5 h-5" />
+              Generate
+            </button>
+          )}
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowGenerate(true)}
-            className="bg-slate-900 text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
-            title="Generate Fixtures"
-          >
-            <Sparkles className="w-5 h-5 text-amber-400" />
-            Generate
-          </button>
-        )}
       </div>
 
       {/* Scheduled Matches List */}
@@ -108,7 +111,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
         </h3>
         
         {scheduledMatches.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <div className="text-center py-8 text-slate-400 bg-[#fbfaf6] rounded-xl border border-dashed border-black/10">
                 No scheduled matches.
             </div>
         ) : (
@@ -121,8 +124,8 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                   }, {} as Record<string, typeof scheduledMatches>)
                 ).map(([weekStart, matches]) => (
                     <div key={weekStart} className="space-y-3">
-                        <h4 className="font-bold text-sm text-slate-500 flex items-center gap-2 sticky top-0 bg-slate-50/95 p-2 rounded-lg backdrop-blur-sm z-10">
-                            <span className="w-2 h-2 rounded-full bg-primary/40"></span>
+                        <h4 className="font-bold text-sm text-slate-600 flex items-center gap-2 sticky top-0 bg-[#fbfaf6]/95 p-2 rounded-lg backdrop-blur-sm z-10">
+                            <span className="w-2 h-2 rounded-full bg-accent"></span>
                             W/C {new Date(weekStart).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
                         </h4>
                         {(() => {
@@ -146,7 +149,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                             };
 
                             return (
-                              <div key={match.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col gap-3">
+                              <div key={match.id} className="rounded-2xl shadow-sm border border-black/5 p-4 flex flex-col gap-3 bg-gradient-to-r from-white to-[#faf8ef]">
                                 <div className="flex flex-wrap justify-between items-center gap-y-2 text-xs text-slate-400">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className={`px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
@@ -160,7 +163,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-3 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                                    <div className="flex items-center gap-3 bg-white/80 px-2 py-1 rounded-lg border border-black/5">
                                     <div className="flex items-center gap-1 text-slate-500 font-bold">
                                       <Calendar className="w-3 h-3" />
                                       <span>{formatDate(match.date)}</span>
@@ -182,7 +185,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                                     {(isAdmin) && (
                                       <button 
                                         onClick={() => navigate(`/add-match?matchId=${match.id}`)}
-                                        className="flex items-center gap-1 text-primary font-bold hover:text-teal-700 p-1"
+                                        className="flex items-center gap-1 text-primary font-bold hover:text-black p-1"
                                         title="Record Result"
                                       >
                                         <Play className="w-3 h-3 fill-current" />
@@ -263,8 +266,8 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                                 const pill = k === 'mixed'
                                   ? 'bg-slate-100 text-slate-600'
                                   : k === 1
-                                    ? 'bg-indigo-50 text-indigo-700'
-                                    : 'bg-emerald-50 text-emerald-700';
+                                    ? 'bg-primary text-accent'
+                                    : 'bg-accent text-black';
 
                                 const ms = grouped[String(k)] || [];
                                 return (
@@ -400,7 +403,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                 </button>
                 <button
                   onClick={applyReschedule}
-                  className="flex-1 py-3 text-white font-bold bg-primary rounded-xl hover:bg-teal-700"
+                  className="flex-1 py-3 text-black font-black bg-accent rounded-xl hover:bg-[#f4dc00]"
                 >
                   Save
                 </button>
@@ -460,7 +463,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
                     }
                   }}
                   disabled={generating || !onGenerateFixtures}
-                  className="flex-1 py-3 text-white font-bold bg-primary rounded-xl hover:bg-teal-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 py-3 text-black font-black bg-accent rounded-xl hover:bg-[#f4dc00] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {generating ? <Save className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
                   {generating ? 'Generating...' : 'Generate'}
