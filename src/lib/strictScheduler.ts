@@ -1,4 +1,5 @@
-import { Player, Match } from '../types';
+import { Player, Match, PlayerRating } from '../types';
+import { getPlayerRating, getRatingStrength } from './playerRatings';
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -53,27 +54,27 @@ export interface StrictModeResult {
 // HELPER: SEED UTILS
 // ---------------------------------------------------------------------------
 
-function getSeedMetrics(players: Player[]) {
-  const pSeeds = players.map((p, idx) => (p.seed ?? (idx + 1)));
-  const maxSeed = Math.max(...pSeeds, 1);
-  const minSeed = Math.min(...pSeeds, 1);
+type TeamPattern = 'AA' | 'AB' | 'AC' | 'BB' | 'BC' | 'CC';
 
-  // Normalization functions
-  // seedNorm(i): 1.0 = strongest (seed 1), 0.0 = weakest (maxSeed)
-  const seedNorm = (idx: number) => {
-    if (maxSeed === minSeed) return 0.5;
-    return (maxSeed - pSeeds[idx]) / (maxSeed - minSeed);
-  };
+function getRatingMetrics(players: Player[]) {
+  const pRatings = players.map((p) => getPlayerRating(p));
+  const pScores = pRatings.map((rating) => getRatingStrength(rating));
 
-  // Tier helper (1=A, 2=B, 3=C)
+  const ratingNorm = (idx: number) => (pScores[idx] - 1) / 2;
+
   const getTier = (idx: number): 1 | 2 | 3 => {
-    const seed = pSeeds[idx];
-    if (seed <= 4) return 1; // Tier A
-    if (seed <= 8) return 2; // Tier B
-    return 3;                // Tier C (9+)
+    const rating = pRatings[idx];
+    if (rating === 'A') return 1;
+    if (rating === 'B') return 2;
+    return 3;
   };
 
-  return { maxSeed, minSeed, pSeeds, seedNorm, getTier };
+  const getTeamPattern = (pair: [number, number]): TeamPattern => {
+    const ratings = [pRatings[pair[0]], pRatings[pair[1]]].sort() as PlayerRating[];
+    return `${ratings[0]}${ratings[1]}` as TeamPattern;
+  };
+
+  return { pRatings, pScores, ratingNorm, getTier, getTeamPattern };
 }
 
 // ---------------------------------------------------------------------------
@@ -145,19 +146,49 @@ export function generateStrictSchedule(
   }
 
   // 2. PREPARE DATA
-  const { pSeeds, seedNorm, getTier } = getSeedMetrics(players);
+  const { pScores, ratingNorm, getTier, getTeamPattern } = getRatingMetrics(players);
 
   // Config
   // Costs are tuned to strongly prefer opponent balance, but we now allow best-effort schedules
   // even when perfect opponent coverage (no 0s) is not achievable for a given division.
   const COST_GAP = 1000;
   const COST_VIOLATION = 50000000; // 50M
-  const COST_SEED_MATCH_BALANCE = 2500;
+  const COST_SEED_MATCH_BALANCE = 200;
 
-  const teamStrength = (pair: [number, number]) => seedNorm(pair[0]) + seedNorm(pair[1]);
+  const teamStrength = (pair: [number, number]) => pScores[pair[0]] + pScores[pair[1]];
+  const matchupPatternPenalty = (patternA: TeamPattern, patternB: TeamPattern) => {
+    const key = [patternA, patternB].sort().join('|');
+
+    const penalties: Record<string, number> = {
+      'AA|AA': 0,
+      'AB|AB': 0,
+      'AC|BB': 0,
+      'BC|BC': 0,
+      'CC|CC': 0,
+      'AC|AC': 1,
+      'BB|BB': 1,
+      'AB|BB': 2,
+      'AC|BC': 2,
+      'AA|AB': 3,
+      'BC|CC': 3,
+      'AA|AC': 4,
+      'BB|BC': 4,
+      'AB|CC': 5,
+      'AA|BB': 6,
+      'AC|CC': 6,
+      'AB|AC': 8,
+      'AB|BC': 8,
+      'AA|BC': 10,
+      'AA|CC': 14,
+    };
+
+    return penalties[key] ?? 6;
+  };
+
   const matchSeedBalanceCost = (a: [number, number], b: [number, number]) => {
-    const diff = teamStrength(a) - teamStrength(b);
-    return diff * diff;
+    const strengthDiff = Math.abs(teamStrength(a) - teamStrength(b));
+    const patternPenalty = matchupPatternPenalty(getTeamPattern(a), getTeamPattern(b));
+    return (strengthDiff * strengthDiff * 2) + patternPenalty;
   };
 
   // Cost Function
@@ -701,8 +732,8 @@ export function generateStrictSchedule(
         else if (tierCombo === '33') stats.count_3x_by_tier.CC++;
 
         // Legacy Stats (Approximate Quartiles)
-        const s1 = seedNorm(i);
-        const s2 = seedNorm(j);
+        const s1 = ratingNorm(i);
+        const s2 = ratingNorm(j);
         
         const q1 = s1 > 0.66 ? 'T' : (s1 < 0.33 ? 'L' : 'M');
         const q2 = s2 > 0.66 ? 'T' : (s2 < 0.33 ? 'L' : 'M');
@@ -729,16 +760,16 @@ export function generateStrictSchedule(
       if (idx === oppIdx) continue;
       const cnt = opponentCounts[idx][oppIdx];
       if (cnt > 0) {
-        oppSeedsSum += (pSeeds[oppIdx] * cnt);
+        oppSeedsSum += (pScores[oppIdx] * cnt);
         oppCount += cnt;
-        if (seedNorm(oppIdx) > 0.66) vsTop += cnt;
-        if (seedNorm(oppIdx) < 0.33) vsBot += cnt;
+        if (ratingNorm(oppIdx) > 0.66) vsTop += cnt;
+        if (ratingNorm(oppIdx) < 0.33) vsBot += cnt;
       }
     }
     
     return {
       id: p.id,
-      seed: pSeeds[idx],
+      seed: pScores[idx],
       avg_opponent_seed: oppCount > 0 ? parseFloat((oppSeedsSum / oppCount).toFixed(2)) : 0,
       matches_vs_top_quartile: vsTop,
       matches_vs_bottom_quartile: vsBot
@@ -800,8 +831,8 @@ export function generateStrictSchedule(
 Generated strict mode schedule for ${N} players.
 - Constraints: All hard constraints met (Partner rotation, No byes).
 - Fairness: Opponent repeats bounded between ${stats.minOpponentRepeat} and ${stats.maxOpponentRepeat}.
-- Seed Logic: 3x repeats biased by Tier (A=1-4, B=5-8, C=9-12).
-  (AA: ${stats.count_3x_by_tier.AA}, AC: ${stats.count_3x_by_tier.AC}, CC: ${stats.count_3x_by_tier.CC}).
+- Rating Logic: Matchups prefer balanced A/B/C pairings and avoid large mismatches.
+  (AA: ${stats.count_3x_by_tier.AA}, AB: ${stats.count_3x_by_tier.AB}, AC: ${stats.count_3x_by_tier.AC}, BB: ${stats.count_3x_by_tier.BB}, BC: ${stats.count_3x_by_tier.BC}, CC: ${stats.count_3x_by_tier.CC}).
 `.trim();
 
   if (hardSchedulePlayers.length > 0) {

@@ -1,7 +1,10 @@
+export type PlayerRating = 'A' | 'B' | 'C';
+
 export interface Player {
   id: string;
   name: string;
-  seed?: number; // 1 = strongest, higher = weaker
+  rating?: PlayerRating; // A = strongest, C = weakest
+  seed?: number; // Legacy numeric storage kept for backward compatibility
   avatar?: string;
   division?: number; // 1 for Division 1, 2 for Division 2, etc.
   in_league?: boolean; // false = excluded from league table and future fixtures

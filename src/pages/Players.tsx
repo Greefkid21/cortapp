@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { Player } from '../types';
+import { Player, PlayerRating } from '../types';
 import { User, Edit2, Plus, Upload, X, Save, Trash2, Check, HelpCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAvailability } from '../context/AvailabilityContext';
 import { useSeason } from '../context/SeasonContext';
 import { getNextWeekStartDate } from '../lib/utils';
 import { Link } from 'react-router-dom';
+import { getPlayerRating, PLAYER_RATINGS } from '../lib/playerRatings';
 
 interface PlayersPageProps {
   players: Player[];
-  onAddPlayer: (name: string, avatar?: string, email?: string, seed?: number, division?: number, inLeague?: boolean) => Promise<void>;
-  onUpdatePlayer: (id: string, name: string, avatar?: string, seed?: number, division?: number, inLeague?: boolean) => Promise<void>;
+  onAddPlayer: (name: string, avatar?: string, email?: string, rating?: PlayerRating, division?: number, inLeague?: boolean) => Promise<void>;
+  onUpdatePlayer: (id: string, name: string, avatar?: string, rating?: PlayerRating, division?: number, inLeague?: boolean) => Promise<void>;
   onDeletePlayer: (id: string) => Promise<void>;
 }
 
@@ -22,7 +23,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
   const [isEditing, setIsEditing] = useState<string | null>(null); // 'new' or player ID
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
-  const [editSeed, setEditSeed] = useState<number | undefined>(undefined);
+  const [editRating, setEditRating] = useState<PlayerRating>('B');
   const [editDivision, setEditDivision] = useState<number>(1);
   const [editInLeague, setEditInLeague] = useState<boolean>(true);
   const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
@@ -38,7 +39,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
   const startNew = () => {
     setEditName('');
     setEditEmail('');
-    setEditSeed(undefined);
+    setEditRating('B');
     setEditDivision(1);
     setEditInLeague(true);
     setEditAvatar(undefined);
@@ -48,7 +49,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
   const startEdit = (player: Player) => {
     setEditName(player.name);
     setEditEmail(''); // Don't allow editing email for existing players here yet
-    setEditSeed(player.seed);
+    setEditRating(getPlayerRating(player));
     setEditDivision(Math.min(player.division || 1, currentSeasonDivisionCount));
     setEditInLeague(player.in_league !== false);
     setEditAvatar(player.avatar);
@@ -75,9 +76,9 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
     setIsSubmitting(true);
     try {
       if (isEditing === 'new') {
-        await onAddPlayer(editName, editAvatar, editEmail, editSeed, editDivision, editInLeague);
+        await onAddPlayer(editName, editAvatar, editEmail, editRating, editDivision, editInLeague);
       } else if (isEditing) {
-        await onUpdatePlayer(isEditing, editName, editAvatar, editSeed, editDivision, editInLeague);
+        await onUpdatePlayer(isEditing, editName, editAvatar, editRating, editDivision, editInLeague);
       }
       setIsEditing(null);
     } catch (error) {
@@ -160,18 +161,21 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
                 />
               </div>
 
-              {/* Seed Input */}
+              {/* Rating Input */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Seed</label>
-                  <input
-                    type="number"
-                    value={editSeed || ''}
-                    onChange={(e) => setEditSeed(e.target.value ? parseInt(e.target.value) : undefined)}
-                    placeholder="e.g. 1"
-                    min="1"
+                  <label className="text-sm font-bold text-slate-700">Rating</label>
+                  <select
+                    value={editRating}
+                    onChange={(e) => setEditRating(e.target.value as PlayerRating)}
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
-                  />
+                  >
+                    {PLAYER_RATINGS.map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">League</label>
@@ -198,7 +202,7 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
                 </div>
               </div>
               <p className="text-xs text-slate-500">
-                Seed 1 is strongest. “No League” excludes the player from the league table and next season fixtures.
+                A is strongest, C is weakest. “No League” excludes the player from the league table and next season fixtures.
               </p>
 
               {/* Email Input (New Player Only) */}
@@ -256,6 +260,9 @@ export function PlayersPage({ players, onAddPlayer, onUpdatePlayer, onDeletePlay
                 <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors">{player.name}</h3>
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-xs text-slate-500">{player.stats.matchesPlayed} matches played</p>
+                  <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold">
+                    Rating {getPlayerRating(player)}
+                  </span>
                   {player.in_league === false ? (
                     <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">No League</span>
                   ) : (

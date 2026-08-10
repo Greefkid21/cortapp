@@ -21,12 +21,13 @@ import { Rules } from './pages/Rules';
 import { Competitions } from './pages/Competitions';
 import { CompetitionDetail } from './pages/CompetitionDetail';
 import { Holidays } from './pages/Holidays';
-import { Match, Player } from './types';
+import { Match, Player, PlayerRating } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
 import { generateSchedule } from './lib/scheduler';
 import { calculateMatchStats, validateMatchScoreInput } from './lib/matchScoring';
 import { HolidayProvider } from './context/HolidayContext';
+import { getPlayerRating, ratingToStoredSeed } from './lib/playerRatings';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -107,6 +108,7 @@ function MainApp() {
             id: p.id,
             name: p.name,
             avatar: p.avatar,
+            rating: getPlayerRating(p),
             seed: p.seed,
             division: p.division || 1,
             in_league: p.in_league ?? true,
@@ -433,14 +435,14 @@ function MainApp() {
     name: string,
     avatar?: string,
     email?: string,
-    seed?: number,
+    rating: PlayerRating = 'B',
     division: number = 1,
     inLeague: boolean = true
   ) => {
     if (supabase) {
         const { data, error } = await supabase
           .from('players')
-          .insert([{ name, avatar, seed, division, in_league: inLeague }])
+          .insert([{ name, avatar, seed: ratingToStoredSeed(rating), division, in_league: inLeague }])
           .select()
           .single();
         
@@ -455,6 +457,7 @@ function MainApp() {
                 id: data.id,
                 name: data.name,
                 avatar: data.avatar,
+                rating: getPlayerRating(data),
                 seed: data.seed,
                 division: data.division || division,
                 in_league: data.in_league ?? inLeague,
@@ -491,6 +494,8 @@ function MainApp() {
             id: Math.random().toString(36).substr(2, 9),
             name,
             avatar,
+            rating,
+            seed: ratingToStoredSeed(rating),
             division,
             in_league: inLeague,
             stats: { matchesPlayed: 0, wins: 0, losses: 0, draws: 0, points: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, gameDifference: 0 }
@@ -507,12 +512,12 @@ function MainApp() {
     id: string,
     name: string,
     avatar?: string,
-    seed?: number,
+    rating: PlayerRating = 'B',
     division?: number,
     inLeague?: boolean
   ) => {
     if (supabase) {
-        const updateData: any = { name, avatar, seed, division };
+        const updateData: any = { name, avatar, seed: ratingToStoredSeed(rating), division };
         if (inLeague !== undefined) updateData.in_league = inLeague;
         const { error } = await supabase.from('players').update(updateData).eq('id', id);
         
@@ -522,9 +527,9 @@ function MainApp() {
             return;
         }
 
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division, in_league: inLeague ?? p.in_league } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, rating, seed: ratingToStoredSeed(rating), division, in_league: inLeague ?? p.in_league } : p));
     } else {
-        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, seed, division, in_league: inLeague ?? p.in_league } : p));
+        setPlayers(players.map(p => p.id === id ? { ...p, name, avatar, rating, seed: ratingToStoredSeed(rating), division, in_league: inLeague ?? p.in_league } : p));
     }
   };
 
