@@ -77,7 +77,7 @@ function ViewerPreviewLayout() {
 }
 
 function MainApp() {
-  const { inviteUser, users } = useAuth();
+  const { inviteUser, users, user, loading: authLoading } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const { currentSeasonId } = useSeason();
@@ -93,6 +93,18 @@ function MainApp() {
 
   const fetchData = async () => {
     setLoadingData(true);
+
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+      setPlayers([]);
+      setMatches([]);
+      setLoadingData(false);
+      return;
+    }
+
     if (supabase) {
       try {
         let mappedPlayers: Player[] = [];
@@ -101,7 +113,7 @@ function MainApp() {
         // Fetch Players
         const { data: playersData } = await supabase
           .from('players')
-          .select('*');
+          .select('id, name, avatar, seed, division, in_league, played, wins, losses, draws, points, sets_won, sets_lost, games_won, games_lost');
         
         if (playersData) {
           mappedPlayers = playersData.map(p => ({
@@ -237,7 +249,7 @@ function MainApp() {
   // Fetch Data
   useEffect(() => {
     fetchData();
-  }, [currentSeasonId, settings]);
+  }, [currentSeasonId, settings, user, authLoading]);
 
 
   const handleEditMatchResult = async (updatedMatch: Match): Promise<boolean> => {
@@ -575,13 +587,13 @@ function MainApp() {
         <Route path="rules" element={<RequireAuth><Rules /></RequireAuth>} />
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
         <Route path="chat" element={<RequireAuth><Chat matches={matches} players={players} /></RequireAuth>} />
-        <Route path="add-match" element={<RequireAuth><AddMatch matches={matches} players={players} onAddResult={handleEditMatchResult} /></RequireAuth>} />
+        <Route path="add-match" element={<RequireAuth><RequireActualAdmin><AddMatch matches={matches} players={players} onAddResult={handleEditMatchResult} /></RequireActualAdmin></RequireAuth>} />
 
         {/* Admin Routes */}
-        <Route path="players" element={<RequireAuth><PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} onDeletePlayer={handleDeletePlayer} /></RequireAuth>} />
+        <Route path="players" element={<RequireAuth><RequireActualAdmin><PlayersPage players={players} onAddPlayer={handleAddPlayer} onUpdatePlayer={handleUpdatePlayer} onDeletePlayer={handleDeletePlayer} /></RequireActualAdmin></RequireAuth>} />
         <Route path="history" element={<RequireAuth><HistoryPage matches={matches} players={players} onEditResult={handleEditMatchResult} /></RequireAuth>} />
-        <Route path="users" element={<RequireAuth><UsersPage players={players} /></RequireAuth>} />
-        <Route path="seasons" element={<RequireAuth><Seasons players={players} matches={matches} onReset={handleResetForNewSeason} /></RequireAuth>} />
+        <Route path="users" element={<RequireAuth><RequireActualAdmin><UsersPage players={players} /></RequireActualAdmin></RequireAuth>} />
+        <Route path="seasons" element={<RequireAuth><RequireActualAdmin><Seasons players={players} matches={matches} onReset={handleResetForNewSeason} /></RequireActualAdmin></RequireAuth>} />
       </Route>
 
       <Route

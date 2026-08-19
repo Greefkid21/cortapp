@@ -246,12 +246,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Real-time subscription for profile updates
   useEffect(() => {
     const client = supabase;
-    if (!client) return;
+    if (!client || !user) return;
+
+    const profileChangeConfig = user.role === 'admin'
+      ? { event: '*' as const, schema: 'public', table: 'profiles' }
+      : { event: '*' as const, schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` };
 
     const channel = client
-      .channel('public:profiles')
+      .channel(`public:profiles:${user.role}:${user.id}`)
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'profiles' }, 
+        profileChangeConfig, 
         (payload) => {
           console.log('Realtime profile update:', payload);
           if (payload.eventType === 'UPDATE') {
@@ -332,7 +336,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       client.removeChannel(channel);
     };
-  }, []);
+  }, [user]);
 
   const login = async (email: string, password?: string) => {
     // Special backdoor for admin123 - allow if password matches, regardless of email

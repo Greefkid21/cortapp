@@ -96,7 +96,7 @@ create policy "Auth insert seasons" on seasons for insert with check (auth.role(
 create policy "Auth update seasons" on seasons for update using (auth.role() = 'authenticated');
 
 -- PLAYERS
-create policy "Public read players" on players for select using (true);
+create policy "Authenticated users can read players" on players for select using (auth.role() = 'authenticated');
 create policy "Auth insert players" on players for insert with check (auth.role() = 'authenticated');
 create policy "Auth update players" on players for update using (auth.role() = 'authenticated');
 create policy "Auth delete players" on players for delete using (auth.role() = 'authenticated');
@@ -108,7 +108,14 @@ create policy "Auth update matches" on matches for update using (auth.role() = '
 create policy "Auth delete matches" on matches for delete using (auth.role() = 'authenticated');
 
 -- PROFILES
-create policy "Public read profiles" on profiles for select using (true);
+create policy "Users can read own profile" on profiles for select using (auth.uid() = id);
+create policy "Admins can view all profiles" on profiles for select using (
+  exists (
+    select 1 from profiles
+    where profiles.id = auth.uid()
+      and profiles.role = 'admin'
+  )
+);
 create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
 
 -- USER INVITES
