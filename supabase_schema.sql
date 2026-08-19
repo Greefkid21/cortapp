@@ -8,6 +8,7 @@ create table seasons (
   start_date date not null default current_date,
   end_date date,
   is_active boolean default true,
+  is_draft boolean default false,
   final_standings jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -108,14 +109,24 @@ create policy "Auth update matches" on matches for update using (auth.role() = '
 create policy "Auth delete matches" on matches for delete using (auth.role() = 'authenticated');
 
 -- PROFILES
+create or replace function public.is_admin_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'admin'
+  );
+$$;
+
 create policy "Users can read own profile" on profiles for select using (auth.uid() = id);
-create policy "Admins can view all profiles" on profiles for select using (
-  exists (
-    select 1 from profiles
-    where profiles.id = auth.uid()
-      and profiles.role = 'admin'
-  )
-);
+create policy "Admins can view all profiles" on profiles for select using (public.is_admin_user());
+create policy "Admins can update any profile" on profiles for update using (public.is_admin_user());
 create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
 
 -- USER INVITES

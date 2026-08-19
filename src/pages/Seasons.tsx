@@ -13,6 +13,7 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
   const [selectedSeason, setSelectedSeason] = useState<SeasonArchive | null>(null);
   const [draftSeason, setDraftSeason] = useState<Season | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [newSeasonDivisionCount, setNewSeasonDivisionCount] = useState(currentSeasonDivisionCount);
   const divisionOptions = [1, 2, 3, 4];
 
@@ -42,17 +43,34 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
 
   const handleSaveDraft = async () => {
     if (draftSeason) {
-        await updateDraftSeason(draftSeason.id, draftSeason);
+        const result = await updateDraftSeason(draftSeason.id, draftSeason);
+        if (!result.ok) {
+          alert(`Failed to save draft: ${result.error || 'Unknown error'}`);
+          return;
+        }
         alert('Draft saved!');
     }
   };
 
   const handleArchiveAndStart = async () => {
+    setIsArchiving(true);
     const name = newSeasonName.trim() || draftSeason?.name?.trim() || `Season ${archives.length + 2}`;
     const divisionCount = draftSeason?.final_standings?.meta?.divisionCount || newSeasonDivisionCount;
-    await archiveAndStart(name, players, matches, divisionCount);
-    await onReset(divisionCount);
-    setNewSeasonName('');
+    try {
+      const archiveResult = await archiveAndStart(name, players, matches, divisionCount);
+      if (!archiveResult.ok) {
+        alert(`Failed to archive and start new season: ${archiveResult.error || 'Unknown error'}`);
+        return;
+      }
+
+      await onReset(divisionCount);
+      setNewSeasonName('');
+      alert(`Archived ${currentSeasonName} and started ${name}.`);
+    } catch (error: any) {
+      alert(`Failed to archive and start new season: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setIsArchiving(false);
+    }
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -204,9 +222,10 @@ export function Seasons({ players, matches, onReset }: { players: Player[]; matc
           </select>
           <button
             onClick={handleArchiveAndStart}
-            className="px-4 py-3 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 flex items-center gap-2"
+            disabled={isArchiving}
+            className="px-4 py-3 bg-primary text-white font-bold rounded-xl hover:bg-teal-700 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Archive className="w-5 h-5" /> Archive & Start New
+            <Archive className="w-5 h-5" /> {isArchiving ? 'Working...' : 'Archive & Start New'}
           </button>
         </div>
         <div className="text-xs text-slate-500">

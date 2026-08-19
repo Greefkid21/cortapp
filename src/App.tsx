@@ -423,7 +423,10 @@ function MainApp() {
         if (allPlayers) {
             for (const p of allPlayers) {
                 const normalizedDivision = Math.min(Math.max(p.division || 1, 1), safeDivisionCount);
-                await supabase.from('players').update({ ...zeroStats, division: normalizedDivision }).eq('id', p.id);
+                const { error } = await supabase.from('players').update({ ...zeroStats, division: normalizedDivision }).eq('id', p.id);
+                if (error) {
+                    throw new Error(`Failed to reset player stats: ${error.message}`);
+                }
             }
         }
         

@@ -8,11 +8,11 @@ interface SeasonContextType {
   currentSeasonId: string | null;
   currentSeasonDivisionCount: number;
   archives: SeasonArchive[];
-  archiveAndStart: (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[], divisionCount: number) => Promise<void>;
+  archiveAndStart: (newSeasonName: string, playersSnapshot: Player[], matchesSnapshot: Match[], divisionCount: number) => Promise<{ ok: boolean; error?: string }>;
   deleteArchive: (id: string) => Promise<void>;
   createDraftSeason: (name: string, divisionCount?: number) => Promise<string | null>;
   getDraftSeason: () => Promise<Season | null>;
-  updateDraftSeason: (id: string, data: Partial<Season>) => Promise<void>;
+  updateDraftSeason: (id: string, data: Partial<Season>) => Promise<{ ok: boolean; error?: string }>;
   loading: boolean;
 }
 
@@ -32,17 +32,26 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     return Math.floor(raw);
   };
 
+  const isMissingDraftColumnError = (error: { message?: string } | null | undefined) => {
+    const message = error?.message?.toLowerCase() || '';
+    return message.includes('is_draft') && (message.includes('column') || message.includes('schema cache'));
+  };
+
   // Load seasons
   useEffect(() => {
     const loadSeasons = async () => {
       if (supabase) {
         try {
           // 1. Get current active season
-          const { data: activeSeason } = await supabase
+          const { data: activeSeason, error: activeSeasonError } = await supabase
             .from('seasons')
             .select('*')
             .eq('is_active', true)
-            .single();
+            .maybeSingle();
+
+          if (activeSeasonError) {
+            console.error('Error loading active season:', activeSeasonError);
+          }
 
           if (activeSeason) {
             setCurrentSeasonName(activeSeason.name);
@@ -56,11 +65,31 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
           }
 
           // 2. Get archives (inactive seasons)
-          const { data: pastSeasons } = await supabase
+          let pastSeasons: any[] | null = null;
+          const archiveQuery = await supabase
             .from('seasons')
             .select('*')
             .eq('is_active', false)
+            .eq('is_draft', false)
             .order('end_date', { ascending: false });
+
+          if (archiveQuery.error && isMissingDraftColumnError(archiveQuery.error)) {
+            const fallbackQuery = await supabase
+              .from('seasons')
+              .select('*')
+              .eq('is_active', false)
+              .order('end_date', { ascending: false });
+
+            if (fallbackQuery.error) {
+              console.error('Error loading archived seasons:', fallbackQuery.error);
+            } else {
+              pastSeasons = fallbackQuery.data;
+            }
+          } else if (archiveQuery.error) {
+            console.error('Error loading archived seasons:', archiveQuery.error);
+          } else {
+            pastSeasons = archiveQuery.data;
+          }
 
           if (pastSeasons) {
             const mappedArchives: SeasonArchive[] = pastSeasons.map(s => ({
@@ -133,7 +162,10 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
           })
           .eq('id', currentSeasonId);
           
-        if (error) console.error('Error archiving season:', error);
+        if (error) {
+          console.error('Error archiving season:', error);
+          return { ok: false, error: error.message };
+        }
       } else {
         // If no ID (first run?), create an archived record for the implicit previous season?
         // Or just proceed.
@@ -146,6 +178,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
           name: newSeasonName,
           start_date: now,
           is_active: true,
+          is_draft: false,
           final_standings: {
             meta: {
               divisionCount: safeDivisionCount
@@ -157,7 +190,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
         
       if (createError) {
         console.error('Error creating new season:', createError);
-        return;
+        return { ok: false, error: createError.message };
       }
 
       // 3. Reset Players Stats (This is tricky, App.tsx manages state, but we need to update DB)
@@ -183,6 +216,8 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
         setArchives(prev => [newArchive, ...prev]);
       }
 
+      return { ok: true };
+
     } else {
       // Mock Mode
       const archive: SeasonArchive = {
@@ -197,6 +232,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
       setCurrentSeasonName(newSeasonName);
       setCurrentSeasonStart(new Date().toISOString().split('T')[0]);
       setCurrentSeasonDivisionCount(safeDivisionCount);
+      return { ok: true };
     }
   };
 
@@ -257,7 +293,9 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
       
       if (error) {
-        console.error('Error fetching draft season:', error);
+        if (!isMissingDraftColumnError(error)) {
+          console.error('Error fetching draft season:', error);
+        }
         return null;
       }
       if (data) {
@@ -286,8 +324,10 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
       
       if (error) {
         console.error('Error updating draft season:', error);
+        return { ok: false, error: error.message };
       }
     }
+    return { ok: true };
   };
 
   const value = useMemo(() => ({

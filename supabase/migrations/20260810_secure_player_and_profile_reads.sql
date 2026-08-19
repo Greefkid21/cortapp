@@ -14,6 +14,22 @@ using (auth.role() = 'authenticated');
 drop policy if exists "Public read profiles" on public.profiles;
 drop policy if exists "Users can read own profile" on public.profiles;
 drop policy if exists "Admins can view all profiles" on public.profiles;
+drop policy if exists "Admins can update any profile" on public.profiles;
+
+create or replace function public.is_admin_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'admin'
+  );
+$$;
 
 create policy "Users can read own profile"
 on public.profiles
@@ -23,11 +39,9 @@ using (auth.uid() = id);
 create policy "Admins can view all profiles"
 on public.profiles
 for select
-using (
-  exists (
-    select 1
-    from public.profiles admin_profile
-    where admin_profile.id = auth.uid()
-      and admin_profile.role = 'admin'
-  )
-);
+using (public.is_admin_user());
+
+create policy "Admins can update any profile"
+on public.profiles
+for update
+using (public.is_admin_user());
