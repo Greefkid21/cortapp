@@ -426,7 +426,7 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
             <div className="space-y-4">
               <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 font-medium">
                 This creates weekly fixtures for {divisionKeys.length === 1 ? 'Division 1' : 'each active division'} using the partner-rotation scheduler.
-                If a division does not divide evenly into groups of 4, the scheduler now rotates rest weeks automatically.
+                If a division does not divide evenly into groups of 4, the scheduler rotates rest weeks automatically and may add extra weeks so everyone can still partner everyone else.
               </div>
 
               <div className="space-y-2">

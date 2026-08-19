@@ -10,6 +10,8 @@ export interface FlexibleScheduleResult {
     playersPerWeek: number;
     byePlayersPerWeek: number;
     byeHistogram: Record<string, number>;
+    missingPartnerPairs: number;
+    partnerCoverageComplete: boolean;
     maxPartnerRepeat: number;
     maxOpponentRepeat: number;
   };
@@ -82,30 +84,27 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
   const n = players.length;
   const activePlayersPerWeek = n - (n % 4);
   const byePlayersPerWeek = n - activePlayersPerWeek;
+  const partnershipsPerWeek = activePlayersPerWeek / 2;
+  const totalPartnerPairs = (n * (n - 1)) / 2;
 
   if (activePlayersPerWeek < 4) {
     throw new Error(`At least 4 active players are required to generate doubles fixtures. You currently have ${n}.`);
   }
 
-  const weeks = n;
+  const weeks = Math.max(n, Math.ceil(totalPartnerPairs / partnershipsPerWeek));
+  const seasonAttempts = n >= 16 ? 120 : 90;
   const ratings = players.map((player) => getPlayerRating(player));
   const strengths = ratings.map((rating) => getRatingStrength(rating));
 
-  const partnerCounts = Array.from({ length: n }, () => Array(n).fill(0));
-  const opponentCounts = Array.from({ length: n }, () => Array(n).fill(0));
-  const byeCounts = Array(n).fill(0);
-  const lastByeWeek = Array(n).fill(-999);
-  const playCounts = Array(n).fill(0);
-  const byePairCounts = new Map<string, number>();
-
-  const teamCost = (a: number, b: number, weekIdx: number) => {
-    const repeats = partnerCounts[a][b];
-    const strengthGap = Math.abs(strengths[a] - strengths[b]);
-    const recentPenalty = Math.max(0, 3 - (weekIdx - Math.max(lastByeWeek[a], lastByeWeek[b])));
-    return (repeats * 5000) + (repeats * repeats * 1000) + (strengthGap * 40) + (recentPenalty * 10);
+  const countMissingPartners = (partnerCounts: number[][], idx: number) => {
+    let missing = 0;
+    for (let other = 0; other < n; other++) {
+      if (other !== idx && partnerCounts[idx][other] === 0) missing++;
+    }
+    return missing;
   };
 
-  const matchCost = (teamA: Team, teamB: Team) => {
+  const matchCost = (teamA: Team, teamB: Team, opponentCounts: number[][]) => {
     const crossPairs: Array<[number, number]> = [
       [teamA[0], teamB[0]],
       [teamA[0], teamB[1]],
@@ -127,13 +126,24 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
     return opponentRepeatCost + (strengthGap * 50) + (patternPenalty * 80);
   };
 
-  const chooseByePlayers = (weekIdx: number) => {
+  const chooseByePlayers = (
+    weekIdx: number,
+    byeCounts: number[],
+    lastByeWeek: number[],
+    playCounts: number[],
+    byePairCounts: Map<string, number>,
+    partnerCounts: number[][]
+  ) => {
     if (byePlayersPerWeek === 0) return [] as number[];
 
     const rankedPlayers = Array.from({ length: n }, (_, idx) => idx)
       .sort((a, b) => {
-        const scoreA = (byeCounts[a] * 1000) - ((weekIdx - lastByeWeek[a]) * 25) + (playCounts[a] * 2);
-        const scoreB = (byeCounts[b] * 1000) - ((weekIdx - lastByeWeek[b]) * 25) + (playCounts[b] * 2);
+        const missingA = countMissingPartners(partnerCounts, a);
+        const missingB = countMissingPartners(partnerCounts, b);
+        const urgentA = (weeks - weekIdx) <= missingA ? 4000 : 0;
+        const urgentB = (weeks - weekIdx) <= missingB ? 4000 : 0;
+        const scoreA = (byeCounts[a] * 1000) - ((weekIdx - lastByeWeek[a]) * 25) + (playCounts[a] * 2) + (missingA * 120) + urgentA;
+        const scoreB = (byeCounts[b] * 1000) - ((weekIdx - lastByeWeek[b]) * 25) + (playCounts[b] * 2) + (missingB * 120) + urgentB;
         return scoreA - scoreB;
       });
 
@@ -146,7 +156,9 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
     for (const combo of candidateCombos) {
       const comboScore = combo.reduce((sum, idx) => {
         const spacingBonus = weekIdx - lastByeWeek[idx];
-        return sum + (byeCounts[idx] * 1000) - (spacingBonus * 30) + (playCounts[idx] * 2);
+        const missingPartners = countMissingPartners(partnerCounts, idx);
+        const urgentPenalty = (weeks - weekIdx) <= missingPartners ? 4000 : 0;
+        return sum + (byeCounts[idx] * 1000) - (spacingBonus * 30) + (playCounts[idx] * 2) + (missingPartners * 120) + urgentPenalty;
       }, 0);
 
       const pairPenalty = combo.reduce((sum, idx, i) => {
@@ -165,8 +177,14 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
     return bestCombo;
   };
 
-  const buildWeek = (activeIndexes: number[], weekIdx: number) => {
-    const attempts = activeIndexes.length >= 16 ? 220 : 140;
+  const buildWeek = (
+    activeIndexes: number[],
+    weekIdx: number,
+    partnerCounts: number[][],
+    opponentCounts: number[][],
+    lastByeWeek: number[]
+  ) => {
+    const attempts = activeIndexes.length >= 16 ? 320 : 220;
     let bestTeams: Team[] | null = null;
     let bestMatches: Array<[Team, Team]> | null = null;
     let bestScore = Infinity;
@@ -175,15 +193,35 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
       const remaining = shuffle(activeIndexes);
       const teams: Team[] = [];
       let teamScore = 0;
+      const missingPartnerCounts = Object.fromEntries(activeIndexes.map((idx) => [idx, countMissingPartners(partnerCounts, idx)]));
 
       while (remaining.length > 0) {
-        const a = remaining.shift()!;
+        let aIndex = 0;
+        for (let i = 1; i < remaining.length; i++) {
+          const current = remaining[i];
+          const best = remaining[aIndex];
+          if ((missingPartnerCounts[current] || 0) > (missingPartnerCounts[best] || 0)) {
+            aIndex = i;
+          }
+        }
+
+        const [a] = remaining.splice(aIndex, 1);
         let bestPartnerIndex = 0;
         let bestPartnerScore = Infinity;
 
         for (let i = 0; i < remaining.length; i++) {
           const b = remaining[i];
-          const score = teamCost(a, b, weekIdx) + Math.random() * 25;
+          const repeats = partnerCounts[a][b];
+          const strengthGap = Math.abs(strengths[a] - strengths[b]);
+          const recentPenalty = Math.max(0, 3 - (weekIdx - Math.max(lastByeWeek[a], lastByeWeek[b])));
+          const coverageUrgency = repeats === 0
+            ? -12000 - ((missingPartnerCounts[a] || 0) * 350) - ((missingPartnerCounts[b] || 0) * 350)
+            : (repeats * 9000) + (repeats * repeats * 1800);
+          const deadlinePenalty = repeats === 0 && ((weeks - weekIdx) <= (missingPartnerCounts[a] || 0) || (weeks - weekIdx) <= (missingPartnerCounts[b] || 0))
+            ? -5000
+            : 0;
+          const score = coverageUrgency + deadlinePenalty + (strengthGap * 35) + (recentPenalty * 12) + Math.random() * 20;
+
           if (score < bestPartnerScore) {
             bestPartnerScore = score;
             bestPartnerIndex = i;
@@ -206,7 +244,7 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
 
         for (let i = 0; i < remainingTeams.length; i++) {
           const teamB = remainingTeams[i];
-          const score = matchCost(teamA, teamB) + Math.random() * 30;
+          const score = matchCost(teamA, teamB, opponentCounts) + Math.random() * 30;
           if (score < bestOpponentScore) {
             bestOpponentScore = score;
             bestOpponentIndex = i;
@@ -229,57 +267,138 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
       throw new Error('Unable to build a valid week of fixtures.');
     }
 
-    return { teams: bestTeams, matches: bestMatches };
+    return { teams: bestTeams, matches: bestMatches, score: bestScore };
   };
 
-  const fixtures: Match[][] = [];
+  const summarizeSchedule = (partnerCounts: number[][], opponentCounts: number[][], byeCounts: number[]) => {
+    let maxPartnerRepeat = 0;
+    let maxOpponentRepeat = 0;
+    let missingPartnerPairs = 0;
+    let repeatedPartnerWeight = 0;
+    let opponentRepeatWeight = 0;
 
-  for (let weekIdx = 0; weekIdx < weeks; weekIdx++) {
-    const byeIndexes = chooseByePlayers(weekIdx);
-    const byeSet = new Set(byeIndexes);
-    const activeIndexes = Array.from({ length: n }, (_, idx) => idx).filter((idx) => !byeSet.has(idx));
-    const { teams, matches } = buildWeek(activeIndexes, weekIdx);
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const partnerCount = partnerCounts[i][j];
+        const opponentCount = opponentCounts[i][j];
 
-    byeIndexes.forEach((idx) => {
-      byeCounts[idx] += 1;
-      lastByeWeek[idx] = weekIdx;
-    });
-
-    byeIndexes.forEach((idx, i) => {
-      for (let j = i + 1; j < byeIndexes.length; j++) {
-        const key = pairKey(idx, byeIndexes[j]);
-        byePairCounts.set(key, (byePairCounts.get(key) || 0) + 1);
+        if (partnerCount === 0) missingPartnerPairs++;
+        maxPartnerRepeat = Math.max(maxPartnerRepeat, partnerCount);
+        maxOpponentRepeat = Math.max(maxOpponentRepeat, opponentCount);
+        repeatedPartnerWeight += Math.max(0, partnerCount - 1);
+        opponentRepeatWeight += Math.max(0, opponentCount - 2);
       }
-    });
+    }
 
-    activeIndexes.forEach((idx) => {
-      playCounts[idx] += 1;
-    });
+    const byeHistogram = byeCounts.reduce<Record<string, number>>((acc, count) => {
+      const key = String(count);
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
 
-    teams.forEach(([a, b]) => {
-      partnerCounts[a][b] += 1;
-      partnerCounts[b][a] += 1;
-    });
+    const byeSpread = Math.max(...byeCounts) - Math.min(...byeCounts);
 
-    matches.forEach(([teamA, teamB]) => {
-      const crossPairs: Array<[number, number]> = [
-        [teamA[0], teamB[0]],
-        [teamA[0], teamB[1]],
-        [teamA[1], teamB[0]],
-        [teamA[1], teamB[1]],
-      ];
+    return {
+      maxPartnerRepeat,
+      maxOpponentRepeat,
+      missingPartnerPairs,
+      repeatedPartnerWeight,
+      opponentRepeatWeight,
+      byeHistogram,
+      byeSpread,
+    };
+  };
 
-      crossPairs.forEach(([a, b]) => {
-        opponentCounts[a][b] += 1;
-        opponentCounts[b][a] += 1;
+  let bestSchedule: Array<Array<[Team, Team]>> | null = null;
+  let bestSummary: ReturnType<typeof summarizeSchedule> | null = null;
+  let bestScore = Infinity;
+
+  for (let seasonAttempt = 0; seasonAttempt < seasonAttempts; seasonAttempt++) {
+    const partnerCounts = Array.from({ length: n }, () => Array(n).fill(0));
+    const opponentCounts = Array.from({ length: n }, () => Array(n).fill(0));
+    const byeCounts = Array(n).fill(0);
+    const lastByeWeek = Array(n).fill(-999);
+    const playCounts = Array(n).fill(0);
+    const byePairCounts = new Map<string, number>();
+    const indexedFixtures: Array<Array<[Team, Team]>> = [];
+    let constructionScore = 0;
+
+    for (let weekIdx = 0; weekIdx < weeks; weekIdx++) {
+      const byeIndexes = chooseByePlayers(weekIdx, byeCounts, lastByeWeek, playCounts, byePairCounts, partnerCounts);
+      const byeSet = new Set(byeIndexes);
+      const activeIndexes = Array.from({ length: n }, (_, idx) => idx).filter((idx) => !byeSet.has(idx));
+      const { teams, matches, score } = buildWeek(activeIndexes, weekIdx, partnerCounts, opponentCounts, lastByeWeek);
+
+      byeIndexes.forEach((idx) => {
+        byeCounts[idx] += 1;
+        lastByeWeek[idx] = weekIdx;
       });
-    });
 
+      byeIndexes.forEach((idx, i) => {
+        for (let j = i + 1; j < byeIndexes.length; j++) {
+          const key = pairKey(idx, byeIndexes[j]);
+          byePairCounts.set(key, (byePairCounts.get(key) || 0) + 1);
+        }
+      });
+
+      activeIndexes.forEach((idx) => {
+        playCounts[idx] += 1;
+      });
+
+      teams.forEach(([a, b]) => {
+        partnerCounts[a][b] += 1;
+        partnerCounts[b][a] += 1;
+      });
+
+      matches.forEach(([teamA, teamB]) => {
+        const crossPairs: Array<[number, number]> = [
+          [teamA[0], teamB[0]],
+          [teamA[0], teamB[1]],
+          [teamA[1], teamB[0]],
+          [teamA[1], teamB[1]],
+        ];
+
+        crossPairs.forEach(([a, b]) => {
+          opponentCounts[a][b] += 1;
+          opponentCounts[b][a] += 1;
+        });
+      });
+
+      indexedFixtures.push(matches);
+      constructionScore += score;
+    }
+
+    const summary = summarizeSchedule(partnerCounts, opponentCounts, byeCounts);
+    const attemptScore =
+      (summary.missingPartnerPairs * 10_000_000) +
+      (summary.repeatedPartnerWeight * 100_000) +
+      (summary.maxPartnerRepeat * 10_000) +
+      (summary.opponentRepeatWeight * 500) +
+      (summary.maxOpponentRepeat * 50) +
+      (summary.byeSpread * 20) +
+      constructionScore;
+
+    if (attemptScore < bestScore) {
+      bestScore = attemptScore;
+      bestSchedule = indexedFixtures;
+      bestSummary = summary;
+    }
+
+    if (summary.missingPartnerPairs === 0 && summary.maxPartnerRepeat <= 2) {
+      break;
+    }
+  }
+
+  if (!bestSchedule || !bestSummary) {
+    throw new Error('Unable to generate a flexible schedule.');
+  }
+
+  const fixtures: Match[][] = bestSchedule.map((matches, weekIdx) => {
     const weekDate = new Date(startDate);
     weekDate.setDate(weekDate.getDate() + (weekIdx * 7));
     const dateStr = weekDate.toISOString().split('T')[0];
 
-    fixtures.push(matches.map(([teamA, teamB], matchIdx) => ({
+    return matches.map(([teamA, teamB], matchIdx) => ({
       id: `w${weekIdx + 1}-m${matchIdx + 1}`,
       team1: [players[teamA[0]].id, players[teamA[1]].id],
       team2: [players[teamB[0]].id, players[teamB[1]].id],
@@ -290,28 +409,16 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
       time: undefined,
       venue: undefined,
       availability: {},
-    })));
-  }
-
-  let maxPartnerRepeat = 0;
-  let maxOpponentRepeat = 0;
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      maxPartnerRepeat = Math.max(maxPartnerRepeat, partnerCounts[i][j]);
-      maxOpponentRepeat = Math.max(maxOpponentRepeat, opponentCounts[i][j]);
-    }
-  }
-
-  const byeHistogram = byeCounts.reduce<Record<string, number>>((acc, count) => {
-    const key = String(count);
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
+    }));
+  });
 
   const explanation = [
-    `Generated a flexible doubles schedule for ${n} players.`,
+    `Generated a flexible doubles schedule for ${n} players over ${weeks} weeks.`,
     `Each week schedules ${activePlayersPerWeek} players and rotates ${byePlayersPerWeek} bye${byePlayersPerWeek === 1 ? '' : 's'} fairly.`,
-    `The scheduler still aims to rotate partners, spread opponents, and avoid unfair A/B/C mismatches where possible.`,
+    bestSummary.missingPartnerPairs === 0
+      ? 'Everyone is scheduled to partner everyone else across the full fixture list.'
+      : `The scheduler reduced missing partner pairings to ${bestSummary.missingPartnerPairs}, which is the best result found.`,
+    'The scheduler still balances opponents and avoids unfair A/B/C mismatches where possible.',
   ].join(' ');
 
   return {
@@ -322,9 +429,11 @@ export function generateFlexibleSchedule(players: Player[], startDate: string): 
       weeks,
       playersPerWeek: activePlayersPerWeek,
       byePlayersPerWeek,
-      byeHistogram,
-      maxPartnerRepeat,
-      maxOpponentRepeat,
+      byeHistogram: bestSummary.byeHistogram,
+      missingPartnerPairs: bestSummary.missingPartnerPairs,
+      partnerCoverageComplete: bestSummary.missingPartnerPairs === 0,
+      maxPartnerRepeat: bestSummary.maxPartnerRepeat,
+      maxOpponentRepeat: bestSummary.maxOpponentRepeat,
     },
   };
 }
