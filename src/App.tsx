@@ -365,7 +365,7 @@ function MainApp() {
 
     const scheduledMatches = (result.fixtures ? result.fixtures.flat() : result.matches).filter(m => m.team1.length === 2 && m.team2.length === 2);
     if (scheduledMatches.length === 0) {
-      alert('No fixtures were generated. Ensure each division has a player count divisible by 4.');
+      alert('No fixtures were generated. Please check that each active division has at least 4 players.');
       return;
     }
 

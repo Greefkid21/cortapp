@@ -1,4 +1,5 @@
 import { Player, Match } from '../types';
+import { generateFlexibleSchedule } from './flexibleScheduler';
 import { generateStrictSchedule } from './strictScheduler';
 
 export interface SchedulerResult {
@@ -16,8 +17,8 @@ export interface SchedulerResult {
  * Generates a schedule for the league.
  * 
  * Dispatcher:
- * - If N is divisible by 4 (Strict Mode), uses the new strict solver (Partner-perfect, fairness optimized).
- * - Otherwise, falls back to the legacy solver (Polygon + Greedy/Exhaustive).
+ * - If N is divisible by 4 (Strict Mode), uses the strict solver.
+ * - Otherwise, uses a flexible solver that rotates weekly byes/rest players.
  */
 export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): SchedulerResult {
   try {
@@ -95,19 +96,24 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         };
     }
 
-    // Legacy Mode for N % 4 !== 0
-    console.log(`Using Legacy Scheduler for ${n} players (not divisible by 4)...`);
-    // Fallback/Legacy Logic (Simplistic placeholder as strict mode is priority)
+    // Flexible Mode for N % 4 !== 0
+    console.log(`Using Flexible Scheduler for ${n} players (with weekly byes)...`);
+    const result = generateFlexibleSchedule(players, startDate);
     return {
-        matches: [],
-        error: {
-            code: "LEGACY_MODE_UNAVAILABLE",
-            message: "Legacy mode (N not divisible by 4) is currently unavailable. Please use N=12, 16, etc."
-        }
+        matches: result.matches,
+        fixtures: result.fixtures,
+        stats: result.stats,
+        explanation: result.explanation
     };
 
   } catch (e) {
       console.error("Scheduler Error:", e);
-      throw e;
+      return {
+        matches: [],
+        error: {
+          code: 'SCHEDULER_ERROR',
+          message: e instanceof Error ? e.message : 'Unknown scheduler error'
+        }
+      };
   }
 }
