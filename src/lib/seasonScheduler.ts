@@ -373,6 +373,108 @@ function chooseByePlayers(
   return best;
 }
 
+function buildMatchesFromTeams(
+  teams: Team[],
+  ratings: PlayerRating[],
+  strengths: number[],
+  state: ScheduleState,
+  weekIdx: number,
+  weights: FixtureFairnessWeights
+) {
+  const remainingTeams = shuffle(teams);
+  const matches: IndexedMatch[] = [];
+  let totalScore = 0;
+
+  while (remainingTeams.length > 1) {
+    const teamA = remainingTeams.shift()!;
+    let bestOpponentIdx = 0;
+    let bestOpponentScore = Infinity;
+
+    for (let i = 0; i < remainingTeams.length; i++) {
+      const teamB = remainingTeams[i];
+      const crossPairs: Array<[number, number]> = [
+        [teamA[0], teamB[0]],
+        [teamA[0], teamB[1]],
+        [teamA[1], teamB[0]],
+        [teamA[1], teamB[1]],
+      ];
+      const opponentPenalty = crossPairs.reduce((sum, [left, right]) => {
+        const repeats = state.opponentCounts[left][right];
+        const recentGap = weekIdx - state.lastOpponentWeek[left][right];
+        return sum +
+          (repeats * repeats * weights.opponentRepeat) +
+          (Math.max(0, 2 - recentGap) * weights.opponentRepeat * 0.15);
+      }, 0);
+
+      const groupKey = quartetKey([teamA[0], teamA[1], teamB[0], teamB[1]]);
+      const matchKey = exactMatchKey(teamA, teamB);
+      const teamStrengthGap = Math.abs((strengths[teamA[0]] + strengths[teamA[1]]) - (strengths[teamB[0]] + strengths[teamB[1]]));
+      const patternPenalty = matchupPatternPenalty(
+        teamPattern(ratings[teamA[0]], ratings[teamA[1]]),
+        teamPattern(ratings[teamB[0]], ratings[teamB[1]])
+      );
+
+      const score =
+        opponentPenalty +
+        ((state.groupCounts.get(groupKey) || 0) * weights.exactMatchRepeat * 0.6) +
+        ((state.exactMatchCounts.get(matchKey) || 0) * weights.exactMatchRepeat) +
+        (teamStrengthGap * weights.abilityBalance) +
+        (patternPenalty * weights.competitiveness) +
+        Math.random() * 20;
+
+      if (score < bestOpponentScore) {
+        bestOpponentScore = score;
+        bestOpponentIdx = i;
+      }
+    }
+
+    const [teamB] = remainingTeams.splice(bestOpponentIdx, 1);
+    matches.push([teamA, teamB]);
+    totalScore += bestOpponentScore;
+  }
+
+  return { matches, score: totalScore };
+}
+
+function generatePartnerRounds(playerCount: number): Team[][] {
+  const players = Array.from({ length: playerCount }, (_, idx) => idx);
+  const rounds: Team[][] = [];
+
+  for (let round = 0; round < playerCount - 1; round++) {
+    const teams: Team[] = [];
+
+    for (let i = 0; i < playerCount / 2; i++) {
+      teams.push([players[i], players[playerCount - 1 - i]]);
+    }
+
+    rounds.push(teams);
+
+    const fixed = players[0];
+    const rotating = players.slice(1);
+    rotating.unshift(rotating.pop()!);
+    const next = [fixed, ...rotating];
+    players.splice(0, players.length, ...next);
+  }
+
+  return rounds;
+}
+
+function canUseCompletePartnerRounds(
+  players: Player[],
+  configUsed: FixtureGeneratorConfig & { fairnessWeights: FixtureFairnessWeights; weekStartDates: string[] },
+  entries: Map<string, PlayerAvailability>
+) {
+  if (players.length % 4 !== 0) return false;
+  if (configUsed.weekStartDates.length < players.length - 1) return false;
+
+  const requiredCourts = players.length / 4;
+  if ((configUsed.courtsAvailable ?? Number.MAX_SAFE_INTEGER) < requiredCourts) return false;
+
+  return configUsed.weekStartDates.every((weekStart) =>
+    players.every((player) => isAvailableForWeek(player.id, weekStart, entries))
+  );
+}
+
 function buildWeekMatches(
   activeIndexes: number[],
   ratings: PlayerRating[],
@@ -467,56 +569,15 @@ function buildWeekMatches(
       attemptScore += bestPartnerScore;
     }
 
-    const remainingTeams = shuffle(teams);
-    const matches: IndexedMatch[] = [];
-
-    while (remainingTeams.length > 1) {
-      const teamA = remainingTeams.shift()!;
-      let bestOpponentIdx = 0;
-      let bestOpponentScore = Infinity;
-
-      for (let i = 0; i < remainingTeams.length; i++) {
-        const teamB = remainingTeams[i];
-        const crossPairs: Array<[number, number]> = [
-          [teamA[0], teamB[0]],
-          [teamA[0], teamB[1]],
-          [teamA[1], teamB[0]],
-          [teamA[1], teamB[1]],
-        ];
-        const opponentPenalty = crossPairs.reduce((sum, [left, right]) => {
-          const repeats = state.opponentCounts[left][right];
-          const recentGap = weekIdx - state.lastOpponentWeek[left][right];
-          return sum +
-            (repeats * repeats * weights.opponentRepeat) +
-            (Math.max(0, 2 - recentGap) * weights.opponentRepeat * 0.15);
-        }, 0);
-
-        const groupKey = quartetKey([teamA[0], teamA[1], teamB[0], teamB[1]]);
-        const matchKey = exactMatchKey(teamA, teamB);
-        const teamStrengthGap = Math.abs((strengths[teamA[0]] + strengths[teamA[1]]) - (strengths[teamB[0]] + strengths[teamB[1]]));
-        const patternPenalty = matchupPatternPenalty(
-          teamPattern(ratings[teamA[0]], ratings[teamA[1]]),
-          teamPattern(ratings[teamB[0]], ratings[teamB[1]])
-        );
-
-        const score =
-          opponentPenalty +
-          ((state.groupCounts.get(groupKey) || 0) * weights.exactMatchRepeat * 0.6) +
-          ((state.exactMatchCounts.get(matchKey) || 0) * weights.exactMatchRepeat) +
-          (teamStrengthGap * weights.abilityBalance) +
-          (patternPenalty * weights.competitiveness) +
-          Math.random() * 30;
-
-        if (score < bestOpponentScore) {
-          bestOpponentScore = score;
-          bestOpponentIdx = i;
-        }
-      }
-
-      const [teamB] = remainingTeams.splice(bestOpponentIdx, 1);
-      matches.push([teamA, teamB]);
-      attemptScore += bestOpponentScore;
-    }
+    const { matches, score: matchScore } = buildMatchesFromTeams(
+      teams,
+      ratings,
+      strengths,
+      state,
+      weekIdx,
+      weights
+    );
+    attemptScore += matchScore;
 
     if (attemptScore < bestScore) {
       bestScore = attemptScore;
@@ -840,6 +901,54 @@ function attemptSeason(
   const indexedFixtures: IndexedMatch[][] = [];
   const byeWeeks: number[][] = [];
   let constructionScore = 0;
+
+  if (canUseCompletePartnerRounds(players, configUsed, entries)) {
+    const partnerRounds = generatePartnerRounds(players.length);
+
+    configUsed.weekStartDates.forEach((_, weekIdx) => {
+      if (weekIdx < partnerRounds.length) {
+        const teams = partnerRounds[weekIdx];
+        const { matches, score } = buildMatchesFromTeams(
+          teams,
+          ratings,
+          strengths,
+          state,
+          weekIdx,
+          configUsed.fairnessWeights
+        );
+        indexedFixtures.push(matches);
+        byeWeeks.push([]);
+        applyWeek(matches, [], state, weekIdx);
+        constructionScore += score;
+        return;
+      }
+
+      const activeIndexes = players.map((_, idx) => idx);
+      const { matches, score } = buildWeekMatches(
+        activeIndexes,
+        ratings,
+        strengths,
+        state,
+        weekIdx,
+        configUsed.weekStartDates.length,
+        configUsed.fairnessWeights
+      );
+      indexedFixtures.push(matches);
+      byeWeeks.push([]);
+      applyWeek(matches, [], state, weekIdx);
+      constructionScore += score;
+    });
+
+    const report = buildReport(players, strengths, configUsed.weekStartDates, indexedFixtures, state, configUsed);
+
+    return {
+      indexedFixtures,
+      byeWeeks,
+      state,
+      report,
+      constructionScore,
+    };
+  }
 
   configUsed.weekStartDates.forEach((weekStart, weekIdx) => {
     const availableIndexes = players
