@@ -1,9 +1,10 @@
-import { generateSchedule } from './scheduler';
+import { generateSchedule, GenerateScheduleOptions } from './scheduler';
 import { Player } from '../types';
 
 export interface WorkerInput {
     players: Player[];
-    startDate: string;
+    options?: GenerateScheduleOptions;
+    startDate?: string;
 }
 
 export interface WorkerResponse {
@@ -17,8 +18,8 @@ self.onmessage = (e: MessageEvent<WorkerInput>) => {
         throw new Error("Invalid input: 'players' array is required.");
     }
 
-    const { players, startDate } = e.data;
-    const result = generateSchedule(players, startDate);
+    const { players, options, startDate } = e.data;
+    const result = generateSchedule(players, options || startDate);
     
     // Safety check: ensure result is serializable
     // (This is generally true for JSON-like objects, but good to be mindful)

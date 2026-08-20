@@ -1,31 +1,100 @@
-import { Player, Match } from '../types';
-import { generateFlexibleSchedule } from './flexibleScheduler';
-import { generateStrictSchedule } from './strictScheduler';
+import { Match, Player, PlayerAvailability } from '../types';
+import {
+  FixtureGeneratorConfig,
+  generateSeasonSchedule,
+  SeasonFairnessReport,
+} from './seasonScheduler';
 
 export interface SchedulerResult {
     matches: Match[];
     fixtures?: Match[][];
     stats?: any;
     explanation?: string;
+    report?: SeasonFairnessReport;
+    configUsed?: FixtureGeneratorConfig;
     error?: {
         code: string;
         message: string;
     };
 }
 
+export interface GenerateScheduleOptions {
+  startDate?: string;
+  availability?: PlayerAvailability[];
+  weekCount?: number;
+  weekStartDates?: string[];
+  courtsAvailable?: number;
+  matchDurationMinutes?: number;
+  idealMatchesPerPlayer?: number;
+  allowByes?: boolean;
+  fairnessWeights?: FixtureGeneratorConfig['fairnessWeights'];
+}
+
+function combineReports(reports: SeasonFairnessReport[]): SeasonFairnessReport | undefined {
+  if (reports.length === 0) return undefined;
+
+  const totalMatches = reports.reduce((sum, report) => sum + report.metrics.totalMatches, 0);
+  const weightedScore = reports.reduce((sum, report) => {
+    const weight = Math.max(1, report.metrics.totalMatches);
+    return sum + (report.overallScore * weight);
+  }, 0);
+  const totalWeight = reports.reduce((sum, report) => sum + Math.max(1, report.metrics.totalMatches), 0);
+
+  return {
+    overallScore: Math.round(weightedScore / totalWeight),
+    explanation: reports.map((report) => report.explanation).join(' '),
+    compromises: reports.flatMap((report) => report.compromises),
+    issues: reports.flatMap((report) => report.issues),
+    playerSummaries: reports.flatMap((report) => report.playerSummaries),
+    metrics: {
+      totalWeeks: Math.max(...reports.map((report) => report.metrics.totalWeeks)),
+      totalMatches,
+      averageMatchesPlayed: Number(
+        (
+          reports.reduce((sum, report) => sum + report.metrics.averageMatchesPlayed * report.playerSummaries.length, 0) /
+          Math.max(1, reports.reduce((sum, report) => sum + report.playerSummaries.length, 0))
+        ).toFixed(2)
+      ),
+      averageByes: Number(
+        (
+          reports.reduce((sum, report) => sum + report.metrics.averageByes * report.playerSummaries.length, 0) /
+          Math.max(1, reports.reduce((sum, report) => sum + report.playerSummaries.length, 0))
+        ).toFixed(2)
+      ),
+      matchSpread: Math.max(...reports.map((report) => report.metrics.matchSpread)),
+      byeSpread: Math.max(...reports.map((report) => report.metrics.byeSpread)),
+      repeatedPartnerships: reports.reduce((sum, report) => sum + report.metrics.repeatedPartnerships, 0),
+      repeatedOpponents: reports.reduce((sum, report) => sum + report.metrics.repeatedOpponents, 0),
+      repeatedGroupsOfFour: reports.reduce((sum, report) => sum + report.metrics.repeatedGroupsOfFour, 0),
+      repeatedExactMatches: reports.reduce((sum, report) => sum + report.metrics.repeatedExactMatches, 0),
+      unbalancedMatches: reports.reduce((sum, report) => sum + report.metrics.unbalancedMatches, 0),
+      weeksWithInsufficientPlayers: reports.reduce((sum, report) => sum + report.metrics.weeksWithInsufficientPlayers, 0),
+      weeksLimitedByCourts: reports.reduce((sum, report) => sum + report.metrics.weeksLimitedByCourts, 0),
+    },
+  };
+}
+
 /**
  * Generates a schedule for the league.
  * 
  * Dispatcher:
- * - If N is divisible by 4 (Strict Mode), uses the strict solver.
- * - Otherwise, uses a flexible solver that rotates weekly byes/rest players.
+ * - Splits active players by division.
+ * - Runs the season-wide optimiser per division.
+ * - Combines weekly fixtures and fairness reporting.
  */
-export function generateSchedule(players: Player[], startDate: string = new Date().toISOString().split('T')[0]): SchedulerResult {
+export function generateSchedule(
+  players: Player[],
+  options: GenerateScheduleOptions | string = new Date().toISOString().split('T')[0]
+): SchedulerResult {
   try {
     if (!players || !Array.isArray(players) || players.length < 2) {
         throw new Error("Invalid players array provided");
     }
 
+    const normalizedOptions: GenerateScheduleOptions = typeof options === 'string'
+      ? { startDate: options }
+      : options;
+    const startDate = normalizedOptions.startDate || new Date().toISOString().split('T')[0];
     const n = players.length;
 
     // Multi-Division Handling
@@ -35,12 +104,13 @@ export function generateSchedule(players: Player[], startDate: string = new Date
         const allFixtures: Match[][] = [];
         let combinedExplanation = "";
         let combinedMatches: Match[] = [];
+        const divisionReports: SeasonFairnessReport[] = [];
 
         for (const div of divisions) {
             const divPlayers = players.filter(p => (p.division || 1) === div);
             if (divPlayers.length === 0) continue;
             
-            const result = generateSchedule(divPlayers, startDate);
+            const result = generateSchedule(divPlayers, { ...normalizedOptions, startDate });
             if (result.error) {
                 return {
                     matches: [],
@@ -59,51 +129,46 @@ export function generateSchedule(players: Player[], startDate: string = new Date
             
             if (result.matches) combinedMatches.push(...result.matches);
             combinedExplanation += `Division ${div}: ${result.explanation}\n`;
+            if (result.report) divisionReports.push(result.report);
         }
 
         return {
             matches: combinedMatches,
             fixtures: allFixtures,
-            explanation: combinedExplanation
+            explanation: combinedExplanation.trim(),
+            report: combineReports(divisionReports),
+            configUsed: {
+              startDate,
+              availability: normalizedOptions.availability,
+              weekCount: normalizedOptions.weekCount,
+              weekStartDates: normalizedOptions.weekStartDates,
+              courtsAvailable: normalizedOptions.courtsAvailable,
+              matchDurationMinutes: normalizedOptions.matchDurationMinutes,
+              idealMatchesPerPlayer: normalizedOptions.idealMatchesPerPlayer,
+              allowByes: normalizedOptions.allowByes,
+              fairnessWeights: normalizedOptions.fairnessWeights,
+            }
         };
     }
 
-    // Strict Mode for N % 4 === 0
-    if (n % 4 === 0) {
-        console.log(`Using Strict Mode Scheduler for ${n} players...`);
-        const result = generateStrictSchedule(players, startDate);
-        
-        if (!result.ok) {
-            console.error("Strict Mode Generation Failed:", result.error);
-            return {
-                matches: [],
-                stats: result.stats,
-                error: result.error
-            };
-        }
-
-        // Flatten Match[][] to Match[] for legacy compatibility
-        const flatMatches = result.fixtures ? result.fixtures.flat() : [];
-
-        // Log stats for verification
-        console.log("Strict Schedule Stats:", result.stats);
-        
-        return { 
-            matches: flatMatches,
-            fixtures: result.fixtures, 
-            stats: result.stats,
-            explanation: result.explanation
-        };
-    }
-
-    // Flexible Mode for N % 4 !== 0
-    console.log(`Using Flexible Scheduler for ${n} players (with weekly byes)...`);
-    const result = generateFlexibleSchedule(players, startDate);
+    console.log(`Using Season Optimiser for ${n} players...`);
+    const result = generateSeasonSchedule(players, {
+      startDate,
+      availability: normalizedOptions.availability,
+      weekCount: normalizedOptions.weekCount,
+      weekStartDates: normalizedOptions.weekStartDates,
+      courtsAvailable: normalizedOptions.courtsAvailable,
+      matchDurationMinutes: normalizedOptions.matchDurationMinutes,
+      idealMatchesPerPlayer: normalizedOptions.idealMatchesPerPlayer,
+      allowByes: normalizedOptions.allowByes,
+      fairnessWeights: normalizedOptions.fairnessWeights,
+    });
     return {
         matches: result.matches,
         fixtures: result.fixtures,
-        stats: result.stats,
-        explanation: result.explanation
+        explanation: result.explanation,
+        report: result.report,
+        configUsed: result.configUsed
     };
 
   } catch (e) {

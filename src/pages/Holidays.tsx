@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CalendarDays, Plane, AlertCircle } from 'lucide-react';
 import { useMemo } from 'react';
-import { Player } from '../types';
+import { Match, Player } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useHolidays } from '../context/HolidayContext';
 
@@ -16,7 +16,20 @@ function formatHolidayRange(startDate: string, endDate: string) {
   return `${start.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} - ${end.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
-export function Holidays({ players }: { players: Player[] }) {
+function formatMatchSummary(match: Match, playerNameById: Map<string, string>) {
+  const team1Names = match.team1.map((id) => playerNameById.get(id) || 'Unknown').join(' + ');
+  const team2Names = match.team2.map((id) => playerNameById.get(id) || 'Unknown').join(' + ');
+  const formattedDate = new Date(match.date).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
+  const extras = [match.time, match.venue].filter(Boolean).join(' · ');
+  return `${formattedDate}: ${team1Names} vs ${team2Names}${extras ? ` · ${extras}` : ''}`;
+}
+
+export function Holidays({ players, matches }: { players: Player[]; matches: Match[] }) {
   const { user } = useAuth();
   const { buildPath } = useAuth();
   const { holidays, loading, setupMessage } = useHolidays();
@@ -29,6 +42,24 @@ export function Holidays({ players }: { players: Player[] }) {
   }, [holidays]);
 
   const getPlayer = (playerId: string) => players.find(player => player.id === playerId);
+  const playerNameById = useMemo(
+    () => new Map(players.map((player) => [player.id, player.name])),
+    [players]
+  );
+
+  const scheduledMatches = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return matches
+      .filter((match) => match.status !== 'completed' && match.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [matches]);
+
+  const getHolidayFixtures = (playerId: string, startDate: string, endDate: string) => {
+    return scheduledMatches.filter((match) => {
+      const isInMatch = [...match.team1, ...match.team2].includes(playerId);
+      return isInMatch && match.date >= startDate && match.date <= endDate;
+    });
+  };
 
   if (loading) {
     return (
@@ -96,30 +127,58 @@ export function Holidays({ players }: { players: Player[] }) {
               const player = getPlayer(holiday.playerId);
               const today = new Date().toISOString().split('T')[0];
               const isCurrent = holiday.startDate <= today && holiday.endDate >= today;
+              const holidayFixtures = getHolidayFixtures(holiday.playerId, holiday.startDate, holiday.endDate);
 
               return (
-                <div key={holiday.id || `${holiday.playerId}-${holiday.startDate}-${holiday.endDate}`} className="p-4 sm:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-gradient-to-r from-white to-[#faf8ef]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-primary border border-black/10 text-accent flex items-center justify-center overflow-hidden shadow-sm">
-                      {player?.avatar ? (
-                        <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="font-bold">{player?.name?.charAt(0) || '?'}</span>
-                      )}
+                <div key={holiday.id || `${holiday.playerId}-${holiday.startDate}-${holiday.endDate}`} className="p-4 sm:p-5 flex flex-col gap-4 bg-gradient-to-r from-white to-[#faf8ef]">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-primary border border-black/10 text-accent flex items-center justify-center overflow-hidden shadow-sm">
+                        {player?.avatar ? (
+                          <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="font-bold">{player?.name?.charAt(0) || '?'}</span>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-900">{player?.name || 'Unknown player'}</div>
+                        <div className="text-sm text-slate-500">{formatHolidayRange(holiday.startDate, holiday.endDate)}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-black text-slate-900">{player?.name || 'Unknown player'}</div>
-                      <div className="text-sm text-slate-500">{formatHolidayRange(holiday.startDate, holiday.endDate)}</div>
+
+                    <div className="flex flex-col items-start sm:items-end gap-2">
+                      <span className={`text-xs font-black uppercase tracking-[0.18em] px-2.5 py-1 rounded-full ${isCurrent ? 'bg-accent text-black' : 'bg-primary/10 text-primary'}`}>
+                        {isCurrent ? 'Away Now' : 'Upcoming'}
+                      </span>
+                      {holiday.note && (
+                        <div className="text-sm text-slate-600 italic max-w-md text-left sm:text-right">
+                          "{holiday.note}"
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-start sm:items-end gap-2">
-                    <span className={`text-xs font-black uppercase tracking-[0.18em] px-2.5 py-1 rounded-full ${isCurrent ? 'bg-accent text-black' : 'bg-primary/10 text-primary'}`}>
-                      {isCurrent ? 'Away Now' : 'Upcoming'}
-                    </span>
-                    {holiday.note && (
-                      <div className="text-sm text-slate-600 italic max-w-md text-left sm:text-right">
-                        "{holiday.note}"
+                  <div className="rounded-2xl border border-black/5 bg-white/80 p-3 sm:p-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                        Fixtures While Away
+                      </div>
+                      <div className="text-xs font-bold text-slate-500">
+                        {holidayFixtures.length} {holidayFixtures.length === 1 ? 'fixture' : 'fixtures'}
+                      </div>
+                    </div>
+
+                    {holidayFixtures.length === 0 ? (
+                      <div className="text-sm text-slate-500">
+                        No scheduled fixtures currently fall within this holiday period.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {holidayFixtures.map((match) => (
+                          <div key={match.id} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                            {formatMatchSummary(match, playerNameById)}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

@@ -28,6 +28,8 @@ import { generateSchedule } from './lib/scheduler';
 import { calculateMatchStats, validateMatchScoreInput } from './lib/matchScoring';
 import { HolidayProvider } from './context/HolidayContext';
 import { getPlayerRating, ratingToStoredSeed } from './lib/playerRatings';
+import { useAvailability } from './context/AvailabilityContext';
+import { SeasonFairnessReport } from './lib/seasonScheduler';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -80,9 +82,12 @@ function MainApp() {
   const { inviteUser, users, user, loading: authLoading } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const { currentSeasonId } = useSeason();
+  const { currentSeasonId, currentSeasonStart } = useSeason();
+  const { availability } = useAvailability();
   const { settings } = useSettings();
   const [loadingData, setLoadingData] = useState(true);
+  const [fixtureGenerationReport, setFixtureGenerationReport] = useState<SeasonFairnessReport | null>(null);
+  const [fixtureGenerationExplanation, setFixtureGenerationExplanation] = useState<string | null>(null);
 
   // Update document title
   useEffect(() => {
@@ -357,7 +362,10 @@ function MainApp() {
     }
 
     const eligiblePlayers = players.filter(p => p.in_league !== false);
-    const result = generateSchedule(eligiblePlayers, startDate);
+    const result = generateSchedule(eligiblePlayers, {
+      startDate: startDate || currentSeasonStart,
+      availability,
+    });
     if (result.error) {
       alert(`Failed to generate fixtures: ${result.error.message}`);
       return;
@@ -400,8 +408,16 @@ function MainApp() {
       return;
     }
 
+    setFixtureGenerationReport(result.report || null);
+    setFixtureGenerationExplanation(result.explanation || null);
     await fetchData();
-    alert('Fixtures generated!');
+    const summaryLine = result.report
+      ? `Overall fairness score: ${result.report.overallScore}/100.`
+      : 'Fixtures generated.';
+    const compromiseLine = result.report?.compromises?.[0]
+      ? `\n${result.report.compromises[0]}`
+      : '';
+    alert(`${summaryLine}${compromiseLine}`);
   };
 
   const handleResetForNewSeason = async (divisionCount: number) => {
@@ -584,8 +600,22 @@ function MainApp() {
         <Route index element={<RequireAuth><Home players={players} matches={matches} /></RequireAuth>} />
         <Route path="competitions" element={<RequireAuth><Competitions players={players} /></RequireAuth>} />
         <Route path="competitions/:id" element={<RequireAuth><CompetitionDetail players={players} /></RequireAuth>} />
-        <Route path="fixtures" element={<RequireAuth><Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} onGenerateFixtures={handleGenerateFixtures} /></RequireAuth>} />
-        <Route path="holidays" element={<RequireAuth><Holidays players={players} /></RequireAuth>} />
+        <Route
+          path="fixtures"
+          element={
+            <RequireAuth>
+              <Fixtures
+                players={players}
+                matches={matches}
+                onUpdateMatch={handleUpdateMatch}
+                onGenerateFixtures={handleGenerateFixtures}
+                generationReport={fixtureGenerationReport}
+                generationExplanation={fixtureGenerationExplanation}
+              />
+            </RequireAuth>
+          }
+        />
+        <Route path="holidays" element={<RequireAuth><Holidays players={players} matches={matches} /></RequireAuth>} />
         <Route path="settings" element={<RequireAuth><Settings /></RequireAuth>} />
         <Route path="rules" element={<RequireAuth><Rules /></RequireAuth>} />
         <Route path="player/:id" element={<RequireAuth><PlayerProfile players={players} matches={matches} /></RequireAuth>} />
@@ -612,8 +642,20 @@ function MainApp() {
         <Route index element={<Home players={players} matches={matches} />} />
         <Route path="competitions" element={<Competitions players={players} />} />
         <Route path="competitions/:id" element={<CompetitionDetail players={players} />} />
-        <Route path="fixtures" element={<Fixtures players={players} matches={matches} onUpdateMatch={handleUpdateMatch} onGenerateFixtures={handleGenerateFixtures} />} />
-        <Route path="holidays" element={<Holidays players={players} />} />
+        <Route
+          path="fixtures"
+          element={
+            <Fixtures
+              players={players}
+              matches={matches}
+              onUpdateMatch={handleUpdateMatch}
+              onGenerateFixtures={handleGenerateFixtures}
+              generationReport={fixtureGenerationReport}
+              generationExplanation={fixtureGenerationExplanation}
+            />
+          }
+        />
+        <Route path="holidays" element={<Holidays players={players} matches={matches} />} />
         <Route path="settings" element={<Settings />} />
         <Route path="rules" element={<Rules />} />
         <Route path="player/:id" element={<PlayerProfile players={players} matches={matches} />} />

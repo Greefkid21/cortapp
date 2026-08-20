@@ -18,6 +18,19 @@ function formatHolidayRange(startDate: string, endDate: string) {
   return `${start.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} - ${end.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
+function formatMatchSummary(match: Match, playerNameById: Map<string, string>) {
+  const team1Names = match.team1.map((id) => playerNameById.get(id) || 'Unknown').join(' + ');
+  const team2Names = match.team2.map((id) => playerNameById.get(id) || 'Unknown').join(' + ');
+  const formattedDate = new Date(match.date).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
+  const extras = [match.time, match.venue].filter(Boolean).join(' · ');
+  return `${formattedDate}: ${team1Names} vs ${team2Names}${extras ? ` · ${extras}` : ''}`;
+}
+
 interface PlayerProfileProps {
   players: Player[];
   matches: Match[];
@@ -154,12 +167,19 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
   }, [completedMatches, player, players]);
 
   const getPlayerName = (id: string) => players.find(p => p.id === id)?.name || 'Unknown';
+  const playerNameById = useMemo(
+    () => new Map(players.map((listedPlayer) => [listedPlayer.id, listedPlayer.name])),
+    [players]
+  );
   const canManageHolidays = !!player && (user?.playerId === player.id || isAdmin);
   const upcomingHolidays = useMemo(() => {
     if (!player) return [];
     const today = new Date().toISOString().split('T')[0];
     return getPlayerHolidays(player.id).filter(holiday => holiday.endDate >= today);
   }, [getPlayerHolidays, player]);
+  const getHolidayFixtures = (startDate: string, endDate: string) => {
+    return upcomingMatches.filter((match) => match.date >= startDate && match.date <= endDate);
+  };
 
   const handleAddHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -407,31 +427,59 @@ export function PlayerProfile({ players, matches }: PlayerProfileProps) {
           {upcomingHolidays.length > 0 ? upcomingHolidays.map((holiday) => {
             const today = new Date().toISOString().split('T')[0];
             const isCurrent = holiday.startDate <= today && holiday.endDate >= today;
+            const holidayFixtures = getHolidayFixtures(holiday.startDate, holiday.endDate);
 
             return (
-              <div key={holiday.id || `${holiday.startDate}-${holiday.endDate}`} className="rounded-xl p-4 border border-black/5 bg-gradient-to-r from-white to-[#faf8ef] flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-slate-800">{formatHolidayRange(holiday.startDate, holiday.endDate)}</span>
-                    <span className={`text-[11px] font-black uppercase tracking-[0.18em] px-2 py-1 rounded-full ${isCurrent ? 'bg-accent text-black' : 'bg-primary/10 text-primary'}`}>
-                      {isCurrent ? 'Away Now' : 'Upcoming'}
-                    </span>
+              <div key={holiday.id || `${holiday.startDate}-${holiday.endDate}`} className="rounded-xl p-4 border border-black/5 bg-gradient-to-r from-white to-[#faf8ef] flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-800">{formatHolidayRange(holiday.startDate, holiday.endDate)}</span>
+                      <span className={`text-[11px] font-black uppercase tracking-[0.18em] px-2 py-1 rounded-full ${isCurrent ? 'bg-accent text-black' : 'bg-primary/10 text-primary'}`}>
+                        {isCurrent ? 'Away Now' : 'Upcoming'}
+                      </span>
+                    </div>
+                    {holiday.note && (
+                      <div className="text-sm text-slate-600 italic mt-1">
+                        "{holiday.note}"
+                      </div>
+                    )}
                   </div>
-                  {holiday.note && (
-                    <div className="text-sm text-slate-600 italic mt-1">
-                      "{holiday.note}"
+                  {canManageHolidays && (
+                    <button
+                      onClick={() => handleDeleteHoliday(holiday.id)}
+                      className="self-start sm:self-auto p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete holiday"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-black/5 bg-white/80 p-3 sm:p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                      Fixtures While Away
+                    </div>
+                    <div className="text-xs font-bold text-slate-500">
+                      {holidayFixtures.length} {holidayFixtures.length === 1 ? 'fixture' : 'fixtures'}
+                    </div>
+                  </div>
+
+                  {holidayFixtures.length === 0 ? (
+                    <div className="text-sm text-slate-500">
+                      No scheduled fixtures currently fall within this holiday period.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {holidayFixtures.map((match) => (
+                        <div key={match.id} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                          {formatMatchSummary(match, playerNameById)}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-                {canManageHolidays && (
-                  <button
-                    onClick={() => handleDeleteHoliday(holiday.id)}
-                    className="self-start sm:self-auto p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete holiday"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
               </div>
             );
           }) : (

@@ -7,15 +7,25 @@ import { useChat } from '../context/ChatContext';
 import { useAvailability } from '../context/AvailabilityContext';
 import { getNextWeekStartDate, getWeekStartDate, formatDate } from '../lib/utils';
 import { MatchAvailabilityStatus } from '../components/MatchAvailabilityStatus';
+import { SeasonFairnessReport } from '../lib/seasonScheduler';
 
 interface FixturesProps {
   players: Player[];
   matches: Match[];
   onUpdateMatch?: (updated: Match) => void;
   onGenerateFixtures?: (startDate: string) => Promise<void>;
+  generationReport?: SeasonFairnessReport | null;
+  generationExplanation?: string | null;
 }
 
-export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }: FixturesProps) {
+export function Fixtures({
+  players,
+  matches,
+  onUpdateMatch,
+  onGenerateFixtures,
+  generationReport,
+  generationExplanation,
+}: FixturesProps) {
   const navigate = useNavigate();
   const { isAdmin, buildPath } = useAuth();
   const { getAvailability } = useAvailability();
@@ -102,6 +112,110 @@ export function Fixtures({ players, matches, onUpdateMatch, onGenerateFixtures }
           )}
         </div>
       </div>
+
+      {generationReport && (
+        <div className="brand-panel p-5 sm:p-6 space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="brand-kicker mb-2">Fairness Report</div>
+              <h3 className="brand-heading text-2xl">Season Fixture Summary</h3>
+              <p className="text-sm text-slate-500 mt-2 max-w-3xl">
+                {generationExplanation || generationReport.explanation}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-black/5 bg-[#faf8ef] px-4 py-3 min-w-[160px]">
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Overall Score</div>
+              <div className="text-3xl font-black text-primary mt-1">{generationReport.overallScore}<span className="text-base text-slate-400">/100</span></div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <div className="text-slate-500 font-semibold">Matches</div>
+              <div className="text-lg font-black text-slate-900">{generationReport.metrics.totalMatches}</div>
+              <div className="text-xs text-slate-500">Avg {generationReport.metrics.averageMatchesPlayed.toFixed(1)} per player</div>
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <div className="text-slate-500 font-semibold">Byes</div>
+              <div className="text-lg font-black text-slate-900">{generationReport.metrics.averageByes.toFixed(1)}</div>
+              <div className="text-xs text-slate-500">Spread {generationReport.metrics.byeSpread}</div>
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <div className="text-slate-500 font-semibold">Partner Repeats</div>
+              <div className="text-lg font-black text-slate-900">{generationReport.metrics.repeatedPartnerships}</div>
+              <div className="text-xs text-slate-500">Opponent repeats {generationReport.metrics.repeatedOpponents}</div>
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <div className="text-slate-500 font-semibold">Balance Alerts</div>
+              <div className="text-lg font-black text-slate-900">{generationReport.metrics.unbalancedMatches}</div>
+              <div className="text-xs text-slate-500">Repeated exact matches {generationReport.metrics.repeatedExactMatches}</div>
+            </div>
+          </div>
+
+          {generationReport.compromises.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm font-bold text-slate-800">Compromises</div>
+              <div className="space-y-2">
+                {generationReport.compromises.slice(0, 4).map((item, index) => (
+                  <div key={`${item}-${index}`} className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-900">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {generationReport.issues.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm font-bold text-slate-800">Key Issues</div>
+              <div className="space-y-2">
+                {generationReport.issues.slice(0, 6).map((issue, index) => (
+                  <div key={`${issue.type}-${index}`} className="rounded-xl bg-white border border-black/5 px-3 py-2 text-sm text-slate-700">
+                    <span className="font-bold text-slate-900 mr-2 uppercase text-[11px] tracking-wide">{issue.severity}</span>
+                    {issue.message}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="text-sm font-bold text-slate-800">Player Breakdown</div>
+            <div className="overflow-x-auto rounded-2xl border border-black/5">
+              <table className="min-w-full text-sm bg-white">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="text-left px-3 py-3 font-bold">Player</th>
+                    <th className="text-left px-3 py-3 font-bold">Matches</th>
+                    <th className="text-left px-3 py-3 font-bold">Byes</th>
+                    <th className="text-left px-3 py-3 font-bold">Partners</th>
+                    <th className="text-left px-3 py-3 font-bold">Partner Repeats</th>
+                    <th className="text-left px-3 py-3 font-bold">Opponents</th>
+                    <th className="text-left px-3 py-3 font-bold">Opponent Repeats</th>
+                    <th className="text-left px-3 py-3 font-bold">Groups of 4</th>
+                    <th className="text-left px-3 py-3 font-bold">Ability Gap</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {generationReport.playerSummaries.map((summary) => (
+                    <tr key={summary.playerId} className="border-t border-slate-100">
+                      <td className="px-3 py-3 font-semibold text-slate-900 whitespace-nowrap">{summary.playerName}</td>
+                      <td className="px-3 py-3">{summary.matchesPlayed}</td>
+                      <td className="px-3 py-3">{summary.byes}</td>
+                      <td className="px-3 py-3">{summary.uniquePartners}</td>
+                      <td className="px-3 py-3">{summary.repeatedPartnerships}</td>
+                      <td className="px-3 py-3">{summary.uniqueOpponents}</td>
+                      <td className="px-3 py-3">{summary.repeatedOpponents}</td>
+                      <td className="px-3 py-3">{summary.uniqueGroupsOfFour}</td>
+                      <td className="px-3 py-3">{summary.abilityBalance.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scheduled Matches List */}
       <div className="space-y-4">
