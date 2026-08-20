@@ -443,18 +443,14 @@ function generatePartnerRounds(playerCount: number): Team[][] {
 
 function canUseCompletePartnerRounds(
   players: Player[],
-  configUsed: FixtureGeneratorConfig & { fairnessWeights: FixtureFairnessWeights; weekStartDates: string[] },
-  entries: Map<string, PlayerAvailability>
+  configUsed: FixtureGeneratorConfig & { fairnessWeights: FixtureFairnessWeights; weekStartDates: string[] }
 ) {
   if (players.length % 4 !== 0) return false;
   if (configUsed.weekStartDates.length < players.length - 1) return false;
 
   const requiredCourts = players.length / 4;
   if ((configUsed.courtsAvailable ?? Number.MAX_SAFE_INTEGER) < requiredCourts) return false;
-
-  return configUsed.weekStartDates.every((weekStart) =>
-    players.every((player) => isAvailableForWeek(player.id, weekStart, entries))
-  );
+  return true;
 }
 
 function buildWeekMatches(
@@ -884,7 +880,7 @@ function attemptSeason(
   const byeWeeks: number[][] = [];
   let constructionScore = 0;
 
-  if (canUseCompletePartnerRounds(players, configUsed, entries)) {
+  if (canUseCompletePartnerRounds(players, configUsed)) {
     const partnerRounds = generatePartnerRounds(players.length);
 
     configUsed.weekStartDates.forEach((_, weekIdx) => {
