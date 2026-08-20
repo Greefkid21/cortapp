@@ -63,6 +63,8 @@ function combineReports(reports: SeasonFairnessReport[]): SeasonFairnessReport |
       ),
       matchSpread: Math.max(...reports.map((report) => report.metrics.matchSpread)),
       byeSpread: Math.max(...reports.map((report) => report.metrics.byeSpread)),
+      missingPartnerPairs: reports.reduce((sum, report) => sum + report.metrics.missingPartnerPairs, 0),
+      maxPartnerRepeat: Math.max(...reports.map((report) => report.metrics.maxPartnerRepeat)),
       repeatedPartnerships: reports.reduce((sum, report) => sum + report.metrics.repeatedPartnerships, 0),
       repeatedOpponents: reports.reduce((sum, report) => sum + report.metrics.repeatedOpponents, 0),
       repeatedGroupsOfFour: reports.reduce((sum, report) => sum + report.metrics.repeatedGroupsOfFour, 0),

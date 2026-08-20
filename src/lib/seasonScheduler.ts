@@ -64,6 +64,8 @@ export interface SeasonFairnessReport {
     averageByes: number;
     matchSpread: number;
     byeSpread: number;
+    missingPartnerPairs: number;
+    maxPartnerRepeat: number;
     repeatedPartnerships: number;
     repeatedOpponents: number;
     repeatedGroupsOfFour: number;
@@ -287,6 +289,13 @@ function countMissingPartners(partnerCounts: number[][], idx: number) {
   return missing;
 }
 
+function countFreshPartnersInPool(partnerCounts: number[][], idx: number, pool: number[]) {
+  return pool.reduce((count, other) => {
+    if (other === idx) return count;
+    return count + (partnerCounts[idx][other] === 0 ? 1 : 0);
+  }, 0);
+}
+
 function chooseByePlayers(
   availableIndexes: number[],
   byeSlots: number,
@@ -378,11 +387,17 @@ function buildWeekMatches(
       for (let i = 1; i < remainingPlayers.length; i++) {
         const current = remainingPlayers[i];
         const best = remainingPlayers[anchorIndex];
+        const currentFreshOptions = countFreshPartnersInPool(state.partnerCounts, current, remainingPlayers);
+        const bestFreshOptions = countFreshPartnersInPool(state.partnerCounts, best, remainingPlayers);
         const urgencyCurrent =
+          (currentFreshOptions === 0 ? 100_000 : 0) +
           (countMissingPartners(state.partnerCounts, current) * 100) -
+          (currentFreshOptions * 1_000) -
           (state.matchCounts[current] * 10);
         const urgencyBest =
+          (bestFreshOptions === 0 ? 100_000 : 0) +
           (countMissingPartners(state.partnerCounts, best) * 100) -
+          (bestFreshOptions * 1_000) -
           (state.matchCounts[best] * 10);
         if (urgencyCurrent > urgencyBest) {
           anchorIndex = i;
@@ -390,32 +405,43 @@ function buildWeekMatches(
       }
 
       const [a] = remainingPlayers.splice(anchorIndex, 1);
+      const freshPartnersForAnchor = remainingPlayers.filter((candidate) => state.partnerCounts[a][candidate] === 0);
+      const mustUseFreshPartner = freshPartnersForAnchor.length > 0;
       let bestPartnerIdx = 0;
       let bestPartnerScore = Infinity;
 
       for (let i = 0; i < remainingPlayers.length; i++) {
         const b = remainingPlayers[i];
         const partnerRepeats = state.partnerCounts[a][b];
+        if (mustUseFreshPartner && partnerRepeats > 0) {
+          continue;
+        }
         const recentPartnerGap = weekIdx - state.lastPartnerWeek[a][b];
         const abilityGap = Math.abs(strengths[a] - strengths[b]);
         const combinedMatchCountGap = Math.abs(state.matchCounts[a] - state.matchCounts[b]);
+        const freshOptionsForB = countFreshPartnersInPool(state.partnerCounts, b, remainingPlayers);
         const missingBonus =
           partnerRepeats === 0
-            ? -(weights.partnerRepeat * 1.2) - ((countMissingPartners(state.partnerCounts, a) + countMissingPartners(state.partnerCounts, b)) * weights.seasonFairness * 0.12)
+            ? -(weights.partnerRepeat * 4) - ((countMissingPartners(state.partnerCounts, a) + countMissingPartners(state.partnerCounts, b)) * weights.seasonFairness * 0.5)
             : 0;
         const urgencyPenalty =
           partnerRepeats > 0 && (totalWeeks - weekIdx) <= countMissingPartners(state.partnerCounts, a)
-            ? weights.seasonFairness * 4
+            ? weights.seasonFairness * 12
             : 0;
+        const flexibilityPenalty =
+          partnerRepeats === 0
+            ? Math.max(0, 2 - freshOptionsForB) * weights.seasonFairness * 0.4
+            : Math.max(0, freshOptionsForB) * weights.partnerRepeat * 0.8;
 
         const score =
-          (partnerRepeats * partnerRepeats * weights.partnerRepeat) +
-          (Math.max(0, 2 - recentPartnerGap) * weights.partnerRepeat * 0.25) +
+          (partnerRepeats * partnerRepeats * weights.partnerRepeat * 4) +
+          (Math.max(0, 3 - recentPartnerGap) * weights.partnerRepeat * 0.4) +
           (abilityGap * weights.abilityBalance * 0.4) +
           (combinedMatchCountGap * weights.matchBalance * 0.08) +
           urgencyPenalty +
+          flexibilityPenalty +
           missingBonus +
-          Math.random() * 25;
+          Math.random() * 10;
 
         if (score < bestPartnerScore) {
           bestPartnerScore = score;
@@ -633,8 +659,14 @@ function buildReport(
 
   let repeatedPartnerships = 0;
   let repeatedOpponents = 0;
+  let missingPartnerPairs = 0;
+  let maxPartnerRepeat = 0;
   for (let i = 0; i < players.length; i++) {
     for (let j = i + 1; j < players.length; j++) {
+      if (state.partnerCounts[i][j] === 0) {
+        missingPartnerPairs += 1;
+      }
+      maxPartnerRepeat = Math.max(maxPartnerRepeat, state.partnerCounts[i][j]);
       repeatedPartnerships += Math.max(0, state.partnerCounts[i][j] - 1);
       repeatedOpponents += Math.max(0, state.opponentCounts[i][j] - 1);
     }
@@ -662,6 +694,15 @@ function buildReport(
         message: `${summary.playerName} receives ${summary.byes} byes versus an average of ${averageByes.toFixed(1)}.`,
       });
     });
+
+  if (missingPartnerPairs > 0) {
+    issues.push({
+      severity: 'high',
+      type: 'partners',
+      message: `${missingPartnerPairs} partner pairing(s) never occurred across the season.`,
+    });
+    compromises.push(`${missingPartnerPairs} partner pairing(s) could not be completed within the available weeks, courts, or availability constraints.`);
+  }
 
   if (repeatedPartnerships > 0) {
     issues.push({
@@ -720,6 +761,8 @@ function buildReport(
   const penalty =
     (matchSpread * configUsed.fairnessWeights.matchBalance * 0.015) +
     (byeSpread * configUsed.fairnessWeights.byeBalance * 0.02) +
+    (missingPartnerPairs * configUsed.fairnessWeights.partnerRepeat * 0.01) +
+    (maxPartnerRepeat > 1 ? (maxPartnerRepeat - 1) * configUsed.fairnessWeights.partnerRepeat * 0.025 : 0) +
     (repeatedPartnerships * configUsed.fairnessWeights.partnerRepeat * 0.0009) +
     (repeatedOpponents * configUsed.fairnessWeights.opponentRepeat * 0.003) +
     (repeatedGroupsOfFour * configUsed.fairnessWeights.exactMatchRepeat * 0.0025) +
@@ -733,8 +776,11 @@ function buildReport(
   const explanation = [
     `Generated ${totalMatches} match${totalMatches === 1 ? '' : 'es'} across ${weekStartDates.length} week${weekStartDates.length === 1 ? '' : 's'}.`,
     `Average matches per player: ${averageMatchesPlayed.toFixed(1)}. Average byes: ${averageByes.toFixed(1)}.`,
+    missingPartnerPairs === 0
+      ? 'Everyone partners with every possible teammate at least once across the season.'
+      : `${missingPartnerPairs} partner pairing(s) are still missing after optimisation.`,
     repeatedPartnerships === 0
-      ? 'No partnerships repeat across the season.'
+      ? 'No partnerships repeat before full coverage is achieved.'
       : `${repeatedPartnerships} repeat partnership(s) remain after optimisation.`,
     repeatedOpponents === 0
       ? 'Opponent rotation is fully varied.'
@@ -757,6 +803,8 @@ function buildReport(
       averageByes: Number(averageByes.toFixed(2)),
       matchSpread,
       byeSpread,
+      missingPartnerPairs,
+      maxPartnerRepeat,
       repeatedPartnerships,
       repeatedOpponents,
       repeatedGroupsOfFour,
@@ -834,6 +882,8 @@ function attemptScore(result: AttemptResult, weights: FixtureFairnessWeights) {
   return (
     (metrics.matchSpread * weights.matchBalance) +
     (metrics.byeSpread * weights.byeBalance) +
+    (metrics.missingPartnerPairs * weights.partnerRepeat * 120) +
+    (Math.max(0, metrics.maxPartnerRepeat - 1) * weights.partnerRepeat * 40) +
     (metrics.repeatedPartnerships * weights.partnerRepeat * 9) +
     (metrics.repeatedOpponents * weights.opponentRepeat * 3) +
     (metrics.repeatedGroupsOfFour * weights.exactMatchRepeat * 6) +
@@ -905,7 +955,12 @@ export function generateSeasonSchedule(players: Player[], config: FixtureGenerat
       bestResult = result;
     }
 
-    if (result.report.metrics.repeatedPartnerships === 0 && result.report.metrics.matchSpread <= 1 && result.report.metrics.byeSpread <= 1) {
+    if (
+      result.report.metrics.missingPartnerPairs === 0 &&
+      result.report.metrics.repeatedPartnerships === 0 &&
+      result.report.metrics.matchSpread <= 1 &&
+      result.report.metrics.byeSpread <= 1
+    ) {
       break;
     }
   }
