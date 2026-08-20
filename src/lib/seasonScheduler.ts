@@ -239,6 +239,8 @@ function estimateWeekCount(players: Player[], config: FixtureGeneratorConfig) {
 }
 
 function buildWeekStartDates(players: Player[], config: FixtureGeneratorConfig) {
+  const minimumWeekCount = estimateWeekCount(players, config);
+
   if (config.weekStartDates && config.weekStartDates.length > 0) {
     return Array.from(new Set(config.weekStartDates)).sort();
   }
@@ -254,11 +256,22 @@ function buildWeekStartDates(players: Player[], config: FixtureGeneratorConfig) 
 
   const derivedWeeks = Array.from(new Set(relevantAvailability)).sort();
   if (derivedWeeks.length > 0) {
-    return derivedWeeks;
+    if (derivedWeeks.length >= minimumWeekCount) {
+      return derivedWeeks;
+    }
+
+    const extendedWeeks = [...derivedWeeks];
+    let cursor = derivedWeeks[derivedWeeks.length - 1];
+
+    while (extendedWeeks.length < minimumWeekCount) {
+      cursor = addDays(cursor, 7);
+      extendedWeeks.push(cursor);
+    }
+
+    return extendedWeeks;
   }
 
-  const weekCount = estimateWeekCount(players, config);
-  return Array.from({ length: weekCount }, (_, index) => addDays(config.startDate, index * 7));
+  return Array.from({ length: minimumWeekCount }, (_, index) => addDays(config.startDate, index * 7));
 }
 
 function availabilityMap(availability: PlayerAvailability[]) {
