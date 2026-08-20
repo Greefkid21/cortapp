@@ -245,33 +245,15 @@ function buildWeekStartDates(players: Player[], config: FixtureGeneratorConfig) 
     return Array.from(new Set(config.weekStartDates)).sort();
   }
 
-  if (config.weekCount && config.weekCount > 0) {
-    return Array.from({ length: config.weekCount }, (_, index) => addDays(config.startDate, index * 7));
-  }
-
   const relevantAvailability = (config.availability || [])
     .filter((entry) => players.some((player) => player.id === entry.playerId))
     .map((entry) => entry.weekStartDate)
     .filter((week) => week >= config.startDate);
+  const derivedWeekCount = new Set(relevantAvailability).size;
+  const requestedWeekCount = config.weekCount && config.weekCount > 0 ? config.weekCount : 0;
+  const finalWeekCount = Math.max(minimumWeekCount, derivedWeekCount, requestedWeekCount);
 
-  const derivedWeeks = Array.from(new Set(relevantAvailability)).sort();
-  if (derivedWeeks.length > 0) {
-    if (derivedWeeks.length >= minimumWeekCount) {
-      return derivedWeeks;
-    }
-
-    const extendedWeeks = [...derivedWeeks];
-    let cursor = derivedWeeks[derivedWeeks.length - 1];
-
-    while (extendedWeeks.length < minimumWeekCount) {
-      cursor = addDays(cursor, 7);
-      extendedWeeks.push(cursor);
-    }
-
-    return extendedWeeks;
-  }
-
-  return Array.from({ length: minimumWeekCount }, (_, index) => addDays(config.startDate, index * 7));
+  return Array.from({ length: finalWeekCount }, (_, index) => addDays(config.startDate, index * 7));
 }
 
 function availabilityMap(availability: PlayerAvailability[]) {
