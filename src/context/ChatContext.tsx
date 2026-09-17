@@ -27,7 +27,7 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { user, users } = useAuth();
+  const { user, users, activeWorkspace } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRead, setLastRead] = useState<Record<string, number>>({});
@@ -67,11 +67,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // Load messages
   useEffect(() => {
     const loadMessages = async () => {
+      if (!activeWorkspace?.workspace.id && supabase) {
+        setMessages([]);
+        setLoading(false);
+        return;
+      }
+
       if (supabase) {
         try {
+          setMessages([]);
           const { data } = await supabase
             .from('messages')
             .select('*')
+            .eq('workspace_id', activeWorkspace!.workspace.id)
             .order('created_at', { ascending: true });
             
           if (data) {
@@ -84,18 +92,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               timestamp: new Date(m.created_at).getTime()
             }));
             
-            setMessages(prev => {
-              // Merge fetched messages with existing (real-time) messages
-              // Deduplicate by ID
-              const existingIds = new Set(prev.map(m => m.id));
-              const uniqueFetched = mappedMessages.filter(m => !existingIds.has(m.id));
-              return [...prev, ...uniqueFetched].sort((a, b) => a.timestamp - b.timestamp);
-            });
+            setMessages(mappedMessages);
             
             // Subscribe to changes
             const subscription = supabase
-              .channel('public:messages')
-              .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+              .channel(`public:messages:${activeWorkspace!.workspace.id}`)
+              .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `workspace_id=eq.${activeWorkspace!.workspace.id}` }, payload => {
                 const newMsg = payload.new;
                 const mapped: ChatMessage = {
                   id: newMsg.id,
@@ -121,11 +123,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   return [...filtered, mapped];
                 });
               })
-              .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
+              .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `workspace_id=eq.${activeWorkspace!.workspace.id}` }, payload => {
                 const updated = payload.new;
                 setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, text: updated.text } : m));
               })
-              .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
+              .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `workspace_id=eq.${activeWorkspace!.workspace.id}` }, payload => {
                 const deletedId = payload.old.id;
                 setMessages(prev => prev.filter(m => m.id !== deletedId));
               })
@@ -152,7 +154,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     };
 
     loadMessages();
-  }, []);
+  }, [activeWorkspace?.workspace.id]);
 
   // Sync to local storage for mock mode
   useEffect(() => {
@@ -165,6 +167,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     messages.filter(m => m.matchId === matchId).sort((a, b) => a.timestamp - b.timestamp);
 
   const sendMessage = async (matchId: string, text: string, sender: AppUser, context?: { match: Match, players: Player[] }) => {
+    if (supabase && !activeWorkspace?.workspace.id) {
+      throw new Error('No active workspace selected.');
+    }
+
     // Optimistic update - Add immediately
     const tempId = 'temp-' + Date.now();
     const optimisticMsg: ChatMessage = {
@@ -181,6 +187,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase
         .from('messages')
         .insert([{
+          workspace_id: activeWorkspace!.workspace.id,
           match_id: matchId,
           sender_user_id: sender.id,
           sender_name: sender.name,

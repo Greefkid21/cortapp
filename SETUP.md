@@ -111,3 +111,19 @@ To enable email notifications, you need to set up Resend.
         Change `from: "Cortapp League <onboarding@resend.dev>"` to `from: "Cortapp League <updates@yourdomain.com>"`.
     4.  Redeploy the function: `npx supabase functions deploy send-email`.
 
+## 7. Paid Club Billing Setup (PayPal)
+
+If you are using the paid multi-club version of the platform, do not stop at the standard setup above.
+
+Also follow:
+
+- `docs/PAYPAL_BILLING_SETUP.md`
+
+That guide covers:
+
+- required billing migrations
+- PayPal Edge Function deployment
+- Supabase secret setup
+- webhook registration
+- the PayPal event list to subscribe to
+- sandbox-to-live rollout steps

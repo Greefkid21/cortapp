@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 export interface LeagueSettings {
   id: number;
@@ -34,17 +35,25 @@ const SettingsContext = createContext<SettingsContextType>({
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<LeagueSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
+  const { activeWorkspace } = useAuth();
 
   useEffect(() => {
     fetchSettings();
-  }, []);
+  }, [activeWorkspace?.workspace.id]);
 
   const fetchSettings = async () => {
+    if (!activeWorkspace?.workspace.id && supabase) {
+      setSettings(defaultSettings);
+      setLoading(false);
+      return;
+    }
+
     if (supabase) {
       try {
         const { data, error } = await supabase
           .from('settings')
           .select('*')
+          .eq('workspace_id', activeWorkspace!.workspace.id)
           .order('id', { ascending: true })
           .limit(1);
         
@@ -62,15 +71,29 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = async (newSettings: Partial<LeagueSettings>) => {
     if (!supabase) return;
+    if (!activeWorkspace?.workspace.id) {
+      throw new Error('No active workspace selected.');
+    }
 
     try {
-      // Use upsert instead of update to handle case where record doesn't exist
-      const { error } = await supabase
+      const { data: existingSettings, error: fetchError } = await supabase
         .from('settings')
-        .upsert({
-          id: 0, // Always use ID 0 for the single settings row
-          ...newSettings
-        });
+        .select('id')
+        .eq('workspace_id', activeWorkspace.workspace.id)
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      const payload = {
+        ...newSettings,
+        workspace_id: activeWorkspace.workspace.id,
+      };
+
+      const { error } = existingSettings
+        ? await supabase.from('settings').update(payload).eq('id', existingSettings.id)
+        : await supabase.from('settings').insert(payload);
 
       if (error) throw error;
 

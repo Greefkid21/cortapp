@@ -54,6 +54,7 @@ npm run build
 ## Important Files
 
 - `SETUP.md`: full Supabase and email setup guide
+- `docs/PAYPAL_BILLING_SETUP.md`: PayPal billing deployment, webhook, and event setup guide
 - `supabase_schema.sql`: base database schema and RLS policies
 - `supabase/migrations`: additional SQL migrations used during development
 - `supabase/functions/send-email`: Supabase Edge Function for email notifications
@@ -79,6 +80,7 @@ At a minimum, developers will need to:
 - review and apply SQL in `supabase/migrations`
 - configure authentication
 - deploy the `send-email` edge function if email notifications are required
+- follow `docs/PAYPAL_BILLING_SETUP.md` if the paid club billing flow is being used
 
 ## Deployment
 

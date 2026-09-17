@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useMemo, useState, useEffect } from 'react';
-import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText, Medal, Plane, Eye } from 'lucide-react';
+import { Trophy, History, Calendar, Users, Lock, LogOut, Shield, Archive, Settings, MoreHorizontal, X, FileText, Medal, Plane, Eye, Building2, BadgePoundSterling } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -9,10 +9,29 @@ import { Logo } from './Logo';
 
 export function Layout() {
   const location = useLocation();
-  const { user, isAdmin, actualIsAdmin, viewerPreview, buildPath, logout, loading } = useAuth();
+  const { user, isAdmin, actualIsAdmin, viewerPreview, buildPath, logout, loading, activeWorkspace, platformRole } = useAuth();
   const { settings } = useSettings();
   const { messages, getUnreadCount } = useChat();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const billingStatus = activeWorkspace?.workspace.billingStatus;
+  const showBillingBanner =
+    !!user &&
+    !!activeWorkspace &&
+    actualIsAdmin &&
+    !viewerPreview &&
+    billingStatus &&
+    billingStatus !== 'billable_active';
+
+  const billingBannerText =
+    billingStatus === 'billing_pending'
+      ? 'Club billing is pending. Your workspace stays active while PayPal setup is being connected.'
+      : billingStatus === 'grace_period'
+        ? 'Club billing is in a grace period. Please review the billing section in Settings.'
+        : billingStatus === 'suspended'
+          ? 'Club billing is suspended. A platform admin will need to reactivate this workspace.'
+          : billingStatus === 'free_exempt'
+            ? 'This workspace is marked free or exempt from billing.'
+            : '';
 
   // Calculate total unread messages across all matches
   // Using a Set to get unique match IDs, then summing unread counts
@@ -52,6 +71,9 @@ export function Layout() {
         { path: '/history', label: 'History', icon: History },
         { path: '/seasons', label: 'Seasons', icon: Archive },
     ] : []),
+    ...(platformRole === 'platform_admin' ? [
+        { path: '/platform/clubs', label: 'Platform', icon: BadgePoundSterling },
+    ] : []),
   ];
 
   // Mobile navigation logic
@@ -77,6 +99,12 @@ export function Layout() {
               {viewerPreview && (
                 <div className="text-[10px] uppercase tracking-[0.18em] text-accent/80 font-black">
                   Viewer Preview
+                </div>
+              )}
+              {activeWorkspace && (
+                <div className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-black flex items-center gap-1">
+                  <Building2 className="w-3 h-3" />
+                  {activeWorkspace.workspace.name}
                 </div>
               )}
             </div>
@@ -113,6 +141,13 @@ export function Layout() {
           ) : (
              <div className="flex gap-2">
                  <Link 
+                  to="/for-clubs"
+                  className="px-3 py-2 text-xs sm:text-sm font-bold text-white/75 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
+                  title="For Clubs"
+                >
+                  For Clubs
+                </Link>
+                 <Link 
                   to="/login"
                   className="p-2 text-white/60 hover:text-accent hover:bg-white/5 rounded-lg transition-colors"
                   title="Login"
@@ -126,6 +161,11 @@ export function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 py-6 pb-24 max-w-3xl">
+        {showBillingBanner && (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm">
+            {billingBannerText}
+          </div>
+        )}
         <Outlet />
       </main>
 

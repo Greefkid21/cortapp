@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { SeasonArchive, Player, Match, Season } from '../types';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 interface SeasonContextType {
   currentSeasonName: string;
@@ -25,6 +26,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
   const [currentSeasonDivisionCount, setCurrentSeasonDivisionCount] = useState<number>(2);
   const [archives, setArchives] = useState<SeasonArchive[]>([]);
   const [loading, setLoading] = useState(true);
+  const { activeWorkspace } = useAuth();
 
   const getDivisionCountFromSeason = (season: { final_standings?: Season['final_standings'] } | null | undefined) => {
     const raw = Number(season?.final_standings?.meta?.divisionCount ?? 2);
@@ -40,12 +42,23 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
   // Load seasons
   useEffect(() => {
     const loadSeasons = async () => {
+      if (!activeWorkspace?.workspace.id && supabase) {
+        setCurrentSeasonName('Season 1');
+        setCurrentSeasonStart(new Date().toISOString().split('T')[0]);
+        setCurrentSeasonId(null);
+        setCurrentSeasonDivisionCount(2);
+        setArchives([]);
+        setLoading(false);
+        return;
+      }
+
       if (supabase) {
         try {
           // 1. Get current active season
           const { data: activeSeason, error: activeSeasonError } = await supabase
             .from('seasons')
             .select('*')
+            .eq('workspace_id', activeWorkspace!.workspace.id)
             .eq('is_active', true)
             .maybeSingle();
 
@@ -69,6 +82,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
           const archiveQuery = await supabase
             .from('seasons')
             .select('*')
+            .eq('workspace_id', activeWorkspace!.workspace.id)
             .eq('is_active', false)
             .eq('is_draft', false)
             .order('end_date', { ascending: false });
@@ -77,6 +91,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
             const fallbackQuery = await supabase
               .from('seasons')
               .select('*')
+              .eq('workspace_id', activeWorkspace!.workspace.id)
               .eq('is_active', false)
               .order('end_date', { ascending: false });
 
@@ -125,7 +140,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     };
 
     loadSeasons();
-  }, []);
+  }, [activeWorkspace?.workspace.id]);
 
   // Sync to local storage for mock mode
   useEffect(() => {
@@ -143,6 +158,9 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     const safeDivisionCount = Number.isFinite(divisionCount) && divisionCount > 0 ? Math.floor(divisionCount) : 1;
 
     if (supabase) {
+      if (!activeWorkspace?.workspace.id) {
+        return { ok: false, error: 'No active workspace selected.' };
+      }
       const now = new Date().toISOString().split('T')[0];
 
       // 1. Archive current season
@@ -160,6 +178,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
               }
             }
           })
+          .eq('workspace_id', activeWorkspace.workspace.id)
           .eq('id', currentSeasonId);
           
         if (error) {
@@ -175,6 +194,7 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
       const { data: newSeason, error: createError } = await supabase
         .from('seasons')
         .insert([{
+          workspace_id: activeWorkspace.workspace.id,
           name: newSeasonName,
           start_date: now,
           is_active: true,
@@ -238,9 +258,11 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
 
   const deleteArchive = async (id: string) => {
     if (supabase) {
+      if (!activeWorkspace?.workspace.id) return;
       const { error } = await supabase
         .from('seasons')
         .delete()
+        .eq('workspace_id', activeWorkspace.workspace.id)
         .eq('id', id);
 
       if (error) {
@@ -257,9 +279,11 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
     const safeDivisionCount = Number.isFinite(divisionCount) && divisionCount > 0 ? Math.floor(divisionCount) : 1;
 
     if (supabase) {
+      if (!activeWorkspace?.workspace.id) return null;
       const { data, error } = await supabase
         .from('seasons')
         .insert([{
+          workspace_id: activeWorkspace.workspace.id,
           name,
           start_date: new Date().toISOString().split('T')[0],
           is_active: false,
@@ -284,9 +308,11 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
 
   const getDraftSeason = async (): Promise<Season | null> => {
     if (supabase) {
+      if (!activeWorkspace?.workspace.id) return null;
       const { data, error } = await supabase
         .from('seasons')
         .select('*')
+        .eq('workspace_id', activeWorkspace.workspace.id)
         .eq('is_draft', true)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -314,12 +340,16 @@ export function SeasonProvider({ children }: { children: React.ReactNode }) {
 
   const updateDraftSeason = async (id: string, data: Partial<Season>) => {
     if (supabase) {
+      if (!activeWorkspace?.workspace.id) {
+        return { ok: false, error: 'No active workspace selected.' };
+      }
       const { error } = await supabase
         .from('seasons')
         .update({
           name: data.name,
           final_standings: data.final_standings
         })
+        .eq('workspace_id', activeWorkspace.workspace.id)
         .eq('id', id);
       
       if (error) {

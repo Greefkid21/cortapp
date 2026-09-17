@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { PlayerHoliday } from '../types';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 interface HolidayContextType {
   holidays: PlayerHoliday[];
@@ -21,6 +22,7 @@ function isHolidayTableMissing(error: { message?: string; code?: string } | null
 function normalizeHoliday(item: any): PlayerHoliday {
   return {
     id: item.id,
+    workspaceId: item.workspace_id,
     playerId: item.player_id,
     startDate: item.start_date,
     endDate: item.end_date,
@@ -33,16 +35,24 @@ export function HolidayProvider({ children }: { children: React.ReactNode }) {
   const [holidays, setHolidays] = useState<PlayerHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
+  const { activeWorkspace } = useAuth();
 
   useEffect(() => {
     const loadHolidays = async () => {
       setLoading(true);
+
+      if (!activeWorkspace?.workspace.id && supabase) {
+        setHolidays([]);
+        setLoading(false);
+        return;
+      }
 
       if (supabase) {
         try {
           const { data, error } = await supabase
             .from('player_holidays')
             .select('*')
+            .eq('workspace_id', activeWorkspace!.workspace.id)
             .order('start_date', { ascending: true });
 
           if (error) {
@@ -72,7 +82,7 @@ export function HolidayProvider({ children }: { children: React.ReactNode }) {
     };
 
     loadHolidays();
-  }, []);
+  }, [activeWorkspace?.workspace.id]);
 
   useEffect(() => {
     if (!supabase) {
@@ -82,11 +92,13 @@ export function HolidayProvider({ children }: { children: React.ReactNode }) {
 
   const addHoliday = async (playerId: string, startDate: string, endDate: string, note?: string) => {
     const trimmedNote = note?.trim() || undefined;
+    if (supabase && !activeWorkspace?.workspace.id) return false;
 
     if (supabase) {
       const { data, error } = await supabase
         .from('player_holidays')
         .insert([{
+          workspace_id: activeWorkspace!.workspace.id,
           player_id: playerId,
           start_date: startDate,
           end_date: endDate,

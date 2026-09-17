@@ -1,8 +1,65 @@
 export type PlayerRating = 'A' | 'B' | 'C';
+export type WorkspaceBillingStatus = 'billing_pending' | 'billable_active' | 'grace_period' | 'suspended' | 'free_exempt';
+export type WorkspaceBillingPlan = 'monthly';
+export type WorkspaceMembershipRole = 'owner_admin' | 'admin' | 'viewer';
+export type PlatformRole = 'user' | 'platform_admin';
+export type PayPalSubscriptionStatus = 'not_started' | 'pending_approval' | 'active' | 'past_due' | 'cancelled';
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  billingStatus: WorkspaceBillingStatus;
+  billingPlan: WorkspaceBillingPlan;
+  isBillingExempt: boolean;
+  billingExemptReason?: string;
+  gracePeriodEndsAt?: string;
+  billingPendingStartedAt?: string;
+  ownerUserId?: string;
+  paypalSubscriptionStatus?: PayPalSubscriptionStatus;
+  paypalSubscriptionId?: string;
+  paypalPlanId?: string;
+  paypalPayerId?: string;
+  paypalSubscriptionStartedAt?: string;
+  paypalSubscriptionEndsAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PlatformBillingConfig {
+  id: number;
+  provider: 'paypal';
+  monthlyPrice: number;
+  currency: string;
+  supportEmail?: string;
+  checkoutEnabled: boolean;
+  isLive: boolean;
+  paypalProductId?: string;
+  paypalPlanId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkspaceMembership {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  role: WorkspaceMembershipRole;
+  playerId?: string;
+  createdAt?: string;
+  workspace?: Workspace;
+}
+
+export interface WorkspaceAccessSummary {
+  workspace: Workspace;
+  membershipRole: WorkspaceMembershipRole;
+  playerId?: string;
+}
 
 export interface Player {
   id: string;
   name: string;
+  workspaceId?: string;
   rating?: PlayerRating; // A = strongest, C = weakest
   seed?: number; // Legacy numeric storage kept for backward compatibility
   avatar?: string;
@@ -24,6 +81,7 @@ export interface Player {
 
 export interface Season {
   id: string;
+  workspace_id?: string;
   name: string;
   start_date: string;
   end_date?: string;
@@ -40,6 +98,7 @@ export interface Season {
 
 export interface Match {
   id: string;
+  workspaceId?: string;
   date: string;
   time?: string; // e.g., '18:00'
   venue?: string; // e.g., 'Court 1'
@@ -70,6 +129,7 @@ export interface AppUser {
   name: string;
   playerId?: string;
   role: 'admin' | 'viewer'; // 'viewer' is the "Player" role
+  platformRole?: PlatformRole;
   status: 'active' | 'invited';
   lastLogin?: string;
 }
@@ -91,6 +151,7 @@ export interface SeasonArchive {
 
 export interface PlayerAvailability {
   id?: string;
+  workspaceId?: string;
   playerId: string;
   weekStartDate: string; // YYYY-MM-DD (Monday)
   isAvailable: boolean;
@@ -101,6 +162,7 @@ export interface PlayerAvailability {
 
 export interface PlayerHoliday {
   id?: string;
+  workspaceId?: string;
   playerId: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
@@ -110,6 +172,7 @@ export interface PlayerHoliday {
 
 export interface Rule {
   id: string;
+  workspaceId?: string;
   content: string;
   display_order: number;
   created_at?: string;

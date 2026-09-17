@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, Wand2 } from 'lucide-react';
 
@@ -87,6 +87,12 @@ export function Login() {
           <p className="text-slate-500 text-center mt-2">
             Enter your credentials to manage the league
           </p>
+          <Link
+            to="/for-clubs"
+            className="mt-3 text-sm font-bold text-primary hover:underline"
+          >
+            New club? See how the service works
+          </Link>
         </div>
 
         {/* Mode Toggle */}

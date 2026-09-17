@@ -21,6 +21,9 @@ import { Rules } from './pages/Rules';
 import { Competitions } from './pages/Competitions';
 import { CompetitionDetail } from './pages/CompetitionDetail';
 import { Holidays } from './pages/Holidays';
+import { WorkspaceOnboarding } from './pages/WorkspaceOnboarding';
+import { PlatformClubs } from './pages/PlatformClubs';
+import { ForClubs } from './pages/ForClubs';
 import { Match, Player, PlayerRating } from './types';
 import { supabase } from './lib/supabase';
 import { sendEmailNotification, getParticipantsFromData } from './lib/notifications';
@@ -67,6 +70,24 @@ function RequireActualAdmin({ children }: { children: JSX.Element }) {
   return children;
 }
 
+function RequirePlatformAdmin({ children }: { children: JSX.Element }) {
+  const { platformRole, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (platformRole !== 'platform_admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 function ViewerPreviewLayout() {
   const { setViewerPreview } = useAuth();
 
@@ -79,7 +100,7 @@ function ViewerPreviewLayout() {
 }
 
 function MainApp() {
-  const { inviteUser, users, user, loading: authLoading } = useAuth();
+  const { inviteUser, users, user, activeWorkspace, loading: authLoading } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const { currentSeasonId, currentSeasonStart } = useSeason();
@@ -110,6 +131,13 @@ function MainApp() {
       return;
     }
 
+    if (!activeWorkspace?.workspace.id && supabase) {
+      setPlayers([]);
+      setMatches([]);
+      setLoadingData(false);
+      return;
+    }
+
     if (supabase) {
       try {
         let mappedPlayers: Player[] = [];
@@ -118,11 +146,13 @@ function MainApp() {
         // Fetch Players
         const { data: playersData } = await supabase
           .from('players')
-          .select('id, name, avatar, seed, division, in_league, played, wins, losses, draws, points, sets_won, sets_lost, games_won, games_lost');
+          .select('id, workspace_id, name, avatar, seed, division, in_league, played, wins, losses, draws, points, sets_won, sets_lost, games_won, games_lost')
+          .eq('workspace_id', activeWorkspace!.workspace.id);
         
         if (playersData) {
           mappedPlayers = playersData.map(p => ({
             id: p.id,
+            workspaceId: p.workspace_id,
             name: p.name,
             avatar: p.avatar,
             rating: getPlayerRating(p),
@@ -146,7 +176,7 @@ function MainApp() {
         }
 
         // Fetch Matches (filtered by current season if applicable)
-        let query = supabase.from('matches').select('*');
+        let query = supabase.from('matches').select('*').eq('workspace_id', activeWorkspace!.workspace.id);
         if (currentSeasonId) {
           query = query.eq('season_id', currentSeasonId);
         }
@@ -156,6 +186,7 @@ function MainApp() {
         if (matchesData) {
           mappedMatches = matchesData.map(m => ({
             id: m.id,
+            workspaceId: m.workspace_id,
             date: new Date(m.date).toISOString().split('T')[0],
             team1: [m.team1_player1_id, m.team1_player2_id].filter(Boolean) as string[],
             team2: [m.team2_player1_id, m.team2_player2_id].filter(Boolean) as string[],
@@ -254,7 +285,7 @@ function MainApp() {
   // Fetch Data
   useEffect(() => {
     fetchData();
-  }, [currentSeasonId, settings, user, authLoading]);
+  }, [activeWorkspace?.workspace.id, currentSeasonId, settings, user, authLoading]);
 
 
   const handleEditMatchResult = async (updatedMatch: Match): Promise<boolean> => {
@@ -277,13 +308,17 @@ function MainApp() {
 
     // Update DB Match
     if (supabase) {
+        if (!activeWorkspace?.workspace.id) {
+            alert('No active workspace selected.');
+            return false;
+        }
         const { error } = await supabase.from('matches').update({
             set1_score: `${updatedMatch.sets[0].team1}-${updatedMatch.sets[0].team2}`,
             set2_score: `${updatedMatch.sets[1].team1}-${updatedMatch.sets[1].team2}`,
             set3_score: updatedMatch.tieBreaker ? `${updatedMatch.tieBreaker.team1}-${updatedMatch.tieBreaker.team2}` : null,
             winner: newStats.winner,
             status: 'completed'
-        }).eq('id', updatedMatch.id);
+        }).eq('id', updatedMatch.id).eq('workspace_id', activeWorkspace.workspace.id);
 
         if (error) {
             console.error('Error updating match:', error);
@@ -321,6 +356,10 @@ function MainApp() {
 
   const handleUpdateMatch = async (updated: Match) => {
     if (supabase) {
+        if (!activeWorkspace?.workspace.id) {
+            alert('No active workspace selected.');
+            return;
+        }
         // Build the update object dynamically to avoid errors if columns are missing
         const updateData: any = {
             date: updated.date,
@@ -336,7 +375,7 @@ function MainApp() {
         if (updated.time !== undefined) updateData.time = updated.time;
         if (updated.venue !== undefined) updateData.venue = updated.venue;
 
-        const { error } = await supabase.from('matches').update(updateData).eq('id', updated.id);
+        const { error } = await supabase.from('matches').update(updateData).eq('workspace_id', activeWorkspace.workspace.id).eq('id', updated.id);
         
         if (error) {
             console.error('Error updating match:', error);
@@ -356,6 +395,10 @@ function MainApp() {
 
   const handleGenerateFixtures = async (startDate: string) => {
     if (!supabase) return;
+    if (!activeWorkspace?.workspace.id) {
+      alert('No active workspace selected.');
+      return;
+    }
     if (!currentSeasonId) {
       alert('No active season found. Please ensure a season exists and is active.');
       return;
@@ -383,6 +426,7 @@ function MainApp() {
     const { error: deleteError } = await supabase
       .from('matches')
       .delete()
+      .eq('workspace_id', activeWorkspace.workspace.id)
       .eq('season_id', currentSeasonId)
       .neq('status', 'completed');
 
@@ -392,6 +436,7 @@ function MainApp() {
     }
 
     const insertRows = scheduledMatches.map(m => ({
+      workspace_id: activeWorkspace.workspace.id,
       season_id: currentSeasonId,
       date: m.date,
       team1_player1_id: m.team1[0],
@@ -424,6 +469,9 @@ function MainApp() {
     const safeDivisionCount = Number.isFinite(divisionCount) && divisionCount > 0 ? Math.floor(divisionCount) : 1;
 
     if (supabase) {
+        if (!activeWorkspace?.workspace.id) {
+          throw new Error('No active workspace selected.');
+        }
         // Reset all player stats to 0
         const zeroStats = {
             points: 0, wins: 0, losses: 0, draws: 0, played: 0,
@@ -435,11 +483,11 @@ function MainApp() {
         // We can loop or use a broader query.
         // update players set ... where id in (all ids)
         // Or better, just loop for now.
-        const { data: allPlayers } = await supabase.from('players').select('id, division');
+        const { data: allPlayers } = await supabase.from('players').select('id, division').eq('workspace_id', activeWorkspace.workspace.id);
         if (allPlayers) {
             for (const p of allPlayers) {
                 const normalizedDivision = Math.min(Math.max(p.division || 1, 1), safeDivisionCount);
-                const { error } = await supabase.from('players').update({ ...zeroStats, division: normalizedDivision }).eq('id', p.id);
+                const { error } = await supabase.from('players').update({ ...zeroStats, division: normalizedDivision }).eq('workspace_id', activeWorkspace.workspace.id).eq('id', p.id);
                 if (error) {
                     throw new Error(`Failed to reset player stats: ${error.message}`);
                 }
@@ -471,9 +519,12 @@ function MainApp() {
     inLeague: boolean = true
   ) => {
     if (supabase) {
+        if (!activeWorkspace?.workspace.id) {
+            throw new Error('No active workspace selected.');
+        }
         const { data, error } = await supabase
           .from('players')
-          .insert([{ name, avatar, seed: ratingToStoredSeed(rating), division, in_league: inLeague }])
+          .insert([{ workspace_id: activeWorkspace.workspace.id, name, avatar, seed: ratingToStoredSeed(rating), division, in_league: inLeague }])
           .select()
           .single();
         
@@ -486,6 +537,7 @@ function MainApp() {
         if (data) {
              const newPlayer: Player = {
                 id: data.id,
+                workspaceId: data.workspace_id,
                 name: data.name,
                 avatar: data.avatar,
                 rating: getPlayerRating(data),
@@ -548,9 +600,13 @@ function MainApp() {
     inLeague?: boolean
   ) => {
     if (supabase) {
+        if (!activeWorkspace?.workspace.id) {
+            alert('No active workspace selected.');
+            return;
+        }
         const updateData: any = { name, avatar, seed: ratingToStoredSeed(rating), division };
         if (inLeague !== undefined) updateData.in_league = inLeague;
-        const { error } = await supabase.from('players').update(updateData).eq('id', id);
+        const { error } = await supabase.from('players').update(updateData).eq('workspace_id', activeWorkspace.workspace.id).eq('id', id);
         
         if (error) {
             console.error('Error updating player:', error);
@@ -568,7 +624,11 @@ function MainApp() {
     if (!confirm('Are you sure you want to delete this player? This cannot be undone.')) return;
 
     if (supabase) {
-        const { error } = await supabase.from('players').delete().eq('id', id);
+        if (!activeWorkspace?.workspace.id) {
+            alert('No active workspace selected.');
+            return;
+        }
+        const { error } = await supabase.from('players').delete().eq('workspace_id', activeWorkspace.workspace.id).eq('id', id);
         
         if (error) {
             console.error('Error deleting player:', error);
@@ -590,11 +650,16 @@ function MainApp() {
       return <div className="p-8 text-center">Loading Data...</div>;
   }
 
+  if (user && supabase && !activeWorkspace) {
+      return <WorkspaceOnboarding />;
+  }
+
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
         {/* Public Route */}
         <Route path="login" element={<Login />} />
+        <Route path="for-clubs" element={<ForClubs />} />
 
         {/* Protected Routes */}
         <Route index element={<RequireAuth><Home players={players} matches={matches} /></RequireAuth>} />
@@ -627,6 +692,7 @@ function MainApp() {
         <Route path="history" element={<RequireAuth><HistoryPage matches={matches} players={players} onEditResult={handleEditMatchResult} /></RequireAuth>} />
         <Route path="users" element={<RequireAuth><RequireActualAdmin><UsersPage players={players} /></RequireActualAdmin></RequireAuth>} />
         <Route path="seasons" element={<RequireAuth><RequireActualAdmin><Seasons players={players} matches={matches} onReset={handleResetForNewSeason} /></RequireActualAdmin></RequireAuth>} />
+        <Route path="platform/clubs" element={<RequireAuth><RequirePlatformAdmin><PlatformClubs /></RequirePlatformAdmin></RequireAuth>} />
       </Route>
 
       <Route

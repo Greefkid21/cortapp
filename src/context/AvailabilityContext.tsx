@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { PlayerAvailability } from '../types';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 interface AvailabilityContextType {
   availability: PlayerAvailability[];
@@ -14,16 +15,23 @@ const AvailabilityContext = createContext<AvailabilityContextType | undefined>(u
 export function AvailabilityProvider({ children }: { children: React.ReactNode }) {
   const [availability, setAvailability] = useState<PlayerAvailability[]>([]);
   const [loading, setLoading] = useState(true);
+  const { activeWorkspace } = useAuth();
 
   // Load availability
   useEffect(() => {
     const loadAvailability = async () => {
       setLoading(true);
+      if (!activeWorkspace?.workspace.id && supabase) {
+        setAvailability([]);
+        setLoading(false);
+        return;
+      }
       if (supabase) {
         try {
           const { data, error } = await supabase
             .from('player_availability')
-            .select('*');
+            .select('*')
+            .eq('workspace_id', activeWorkspace!.workspace.id);
             
           if (error) {
             console.error('Error loading availability:', error);
@@ -31,6 +39,7 @@ export function AvailabilityProvider({ children }: { children: React.ReactNode }
             // Map DB columns to TS interface
             const mapped: PlayerAvailability[] = data.map(item => ({
                 id: item.id,
+                workspaceId: item.workspace_id,
                 playerId: item.player_id,
                 weekStartDate: item.week_start_date,
                 isAvailable: item.is_available,
@@ -56,7 +65,7 @@ export function AvailabilityProvider({ children }: { children: React.ReactNode }
     };
 
     loadAvailability();
-  }, []);
+  }, [activeWorkspace?.workspace.id]);
 
   // Sync to local storage for mock mode
   useEffect(() => {
@@ -67,11 +76,12 @@ export function AvailabilityProvider({ children }: { children: React.ReactNode }
 
   const updateAvailability = async (playerId: string, weekStartDate: string, isAvailable: boolean, daysAvailable: string[], note?: string) => {
     const now = new Date().toISOString();
+    if (supabase && !activeWorkspace?.workspace.id) return false;
     
     // Optimistic Update
     setAvailability(prev => {
         const filtered = prev.filter(a => !(a.playerId === playerId && a.weekStartDate === weekStartDate));
-        return [...filtered, { playerId, weekStartDate, isAvailable, daysAvailable, note, updatedAt: now }];
+        return [...filtered, { workspaceId: activeWorkspace?.workspace.id, playerId, weekStartDate, isAvailable, daysAvailable, note, updatedAt: now }];
     });
 
     if (supabase) {
@@ -79,6 +89,7 @@ export function AvailabilityProvider({ children }: { children: React.ReactNode }
         const { error } = await supabase
             .from('player_availability')
             .upsert({
+                workspace_id: activeWorkspace!.workspace.id,
                 player_id: playerId,
                 week_start_date: weekStartDate,
                 is_available: isAvailable,

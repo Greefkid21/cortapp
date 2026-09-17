@@ -2,15 +2,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Settings as SettingsIcon, Save, AlertCircle, Lock, Mail, Upload, Camera, Loader2, X as CloseIcon, Check } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { PlatformBillingConfig } from '../types';
+import { Settings as SettingsIcon, Save, AlertCircle, BadgePoundSterling, CreditCard, Lock, Mail, Upload, Camera, Loader2, RefreshCw, XCircle, X as CloseIcon, Check } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import Cropper from 'react-easy-crop';
 import { getCroppedImg } from '../lib/imageUtils';
 
 export function Settings() {
   const { settings, updateSettings } = useSettings();
-  const { user, isAdmin } = useAuth();
-  const navigate = useNavigate();
+  const { user, isAdmin, viewerPreview, activeWorkspace, workspaceRole, platformRole } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canSeeBilling = !viewerPreview && (platformRole === 'platform_admin' || workspaceRole === 'owner_admin' || workspaceRole === 'admin');
   
   const [formData, setFormData] = useState({
     league_name: '',
@@ -33,6 +35,12 @@ export function Settings() {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [billingConfig, setBillingConfig] = useState<PlatformBillingConfig | null>(null);
+  const [loadingBilling, setLoadingBilling] = useState(false);
+  const [billingActionMessage, setBillingActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [refreshingBilling, setRefreshingBilling] = useState(false);
+  const [cancellingBilling, setCancellingBilling] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -47,10 +55,43 @@ export function Settings() {
     }
   }, [settings]);
 
-  // Protect route
   useEffect(() => {
-    // We now allow non-admins for account settings
-  }, [user, navigate]);
+    const fetchBillingConfig = async () => {
+      if (!supabase || !canSeeBilling) {
+        setBillingConfig(null);
+        return;
+      }
+
+      setLoadingBilling(true);
+      const { data, error } = await supabase
+        .from('platform_billing_config')
+        .select('*')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Failed to load billing config:', error);
+        setBillingConfig(null);
+      } else if (data) {
+        setBillingConfig({
+          id: data.id,
+          provider: data.provider,
+          monthlyPrice: Number(data.monthly_price || 0),
+          currency: data.currency || 'GBP',
+          supportEmail: data.support_email || undefined,
+          checkoutEnabled: !!data.checkout_enabled,
+          isLive: !!data.is_live,
+          paypalProductId: data.paypal_product_id || undefined,
+          paypalPlanId: data.paypal_plan_id || undefined,
+          createdAt: data.created_at || undefined,
+          updatedAt: data.updated_at || undefined,
+        });
+      }
+      setLoadingBilling(false);
+    };
+
+    fetchBillingConfig();
+  }, [canSeeBilling]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,6 +187,144 @@ export function Settings() {
     }
   };
 
+  const handleRefreshBilling = useCallback(async (options?: { silent?: boolean }) => {
+    if (!supabase || !activeWorkspace?.workspace.id) return false;
+
+    if (!options?.silent) {
+      setBillingActionMessage(null);
+    }
+    setRefreshingBilling(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('paypal-sync-subscription', {
+        body: { workspaceId: activeWorkspace.workspace.id },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to refresh PayPal status.');
+      }
+
+      if (!options?.silent) {
+        setBillingActionMessage({ type: 'success', text: `PayPal status refreshed: ${data?.status || 'updated'}. Reload the page if you want to refresh the top banner immediately.` });
+      }
+
+      return true;
+    } catch (error: any) {
+      if (!options?.silent) {
+        setBillingActionMessage({ type: 'error', text: error.message || 'Failed to refresh PayPal status.' });
+      }
+      return false;
+    } finally {
+      setRefreshingBilling(false);
+    }
+  }, [activeWorkspace?.workspace.id]);
+
+  const handleStartPayPalCheckout = async () => {
+    if (!supabase || !activeWorkspace?.workspace.id) return;
+
+    setBillingActionMessage(null);
+    setStartingCheckout(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('paypal-create-subscription', {
+        body: { workspaceId: activeWorkspace.workspace.id },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to start PayPal checkout.');
+      }
+
+      if (!data?.approvalUrl) {
+        throw new Error('PayPal did not return an approval URL.');
+      }
+
+      window.location.href = data.approvalUrl;
+    } catch (error: any) {
+      setBillingActionMessage({ type: 'error', text: error.message || 'Failed to start PayPal checkout.' });
+      setStartingCheckout(false);
+    }
+  };
+
+  const handleCancelBilling = async () => {
+    if (!supabase || !activeWorkspace?.workspace.id) return;
+
+    const confirmed = window.confirm('Cancel this PayPal subscription? The workspace will move into a grace period so billing can be resolved.');
+    if (!confirmed) return;
+
+    setBillingActionMessage(null);
+    setCancellingBilling(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('paypal-cancel-subscription', {
+        body: { workspaceId: activeWorkspace.workspace.id },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to cancel PayPal billing.');
+      }
+
+      setBillingActionMessage({
+        type: 'success',
+        text: `PayPal subscription cancelled. Workspace moved to grace period${data?.subscriptionId ? ` for subscription ${data.subscriptionId}.` : '.'}`,
+      });
+    } catch (error: any) {
+      setBillingActionMessage({ type: 'error', text: error.message || 'Failed to cancel PayPal billing.' });
+    } finally {
+      setCancellingBilling(false);
+    }
+  };
+
+  const billingStatus = activeWorkspace?.workspace.billingStatus;
+  const priceLine = billingConfig
+    ? `${billingConfig.currency} ${billingConfig.monthlyPrice.toFixed(2)} / month`
+    : null;
+
+  const billingMessage = (() => {
+    switch (billingStatus) {
+      case 'billing_pending':
+        return billingConfig?.checkoutEnabled
+          ? 'Your club is active and awaiting PayPal setup. When checkout is enabled, this workspace can move into a live subscription without changing the rest of your setup.'
+          : 'Your club is active and marked as billing pending. PayPal checkout is not live yet, so you can keep setting up your league while billing automation is being connected.';
+      case 'billable_active':
+        return 'This workspace is marked as billable and active. Once the live PayPal flow is connected, subscription updates can be tracked here.';
+      case 'grace_period':
+        return 'This workspace is in a grace period. Access is still available while billing is being resolved.';
+      case 'suspended':
+        return 'This workspace is currently suspended for billing reasons. A platform admin will need to reactivate it.';
+      case 'free_exempt':
+        return activeWorkspace?.workspace.billingExemptReason || 'This workspace has been marked free or exempt by the platform admin.';
+      default:
+        return null;
+    }
+  })();
+
+  useEffect(() => {
+    const paypalState = searchParams.get('paypal');
+    const workspaceParam = searchParams.get('workspace');
+
+    if (!paypalState) return;
+    if (workspaceParam && activeWorkspace?.workspace.id && workspaceParam !== activeWorkspace.workspace.id) return;
+
+    if (paypalState === 'cancelled') {
+      setBillingActionMessage({ type: 'error', text: 'PayPal checkout was cancelled before subscription approval completed.' });
+      setSearchParams({});
+      return;
+    }
+
+    if (paypalState === 'success') {
+      handleRefreshBilling({ silent: true }).then((ok) => {
+        setBillingActionMessage({
+          type: ok ? 'success' : 'error',
+          text: ok
+            ? 'Returned from PayPal and refreshed the latest subscription state.'
+            : 'Returned from PayPal, but the latest subscription state could not be confirmed yet.',
+        });
+        setSearchParams({});
+      });
+      return;
+    }
+  }, [activeWorkspace?.workspace.id, handleRefreshBilling, searchParams, setSearchParams]);
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center gap-2">
@@ -204,6 +383,98 @@ export function Settings() {
             </button>
         </form>
       </div>
+
+      {canSeeBilling && activeWorkspace && (
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <BadgePoundSterling className="w-5 h-5 text-primary" /> Club Billing
+        </h3>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Status</span>
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">
+              {billingStatus ? billingStatus.replace(/_/g, ' ') : 'Unknown'}
+            </span>
+          </div>
+          <div className="text-sm text-slate-600">{billingMessage}</div>
+          {priceLine && (
+            <div className="text-sm text-slate-600">
+              Monthly price: <span className="font-semibold text-slate-800">{priceLine}</span>
+            </div>
+          )}
+          {activeWorkspace.workspace.paypalSubscriptionStatus && (
+            <div className="text-sm text-slate-600">
+              PayPal subscription status: <span className="font-semibold text-slate-800">{activeWorkspace.workspace.paypalSubscriptionStatus.replace(/_/g, ' ')}</span>
+            </div>
+          )}
+          {activeWorkspace.workspace.gracePeriodEndsAt && (
+            <div className="text-sm text-slate-600">
+              Grace period ends: <span className="font-semibold text-slate-800">{activeWorkspace.workspace.gracePeriodEndsAt.slice(0, 10)}</span>
+            </div>
+          )}
+          {billingConfig?.supportEmail && (
+            <div className="text-sm text-slate-600">
+              Billing support: <span className="font-semibold text-slate-800">{billingConfig.supportEmail}</span>
+            </div>
+          )}
+          {loadingBilling && (
+            <div className="text-sm text-slate-500">Loading billing information...</div>
+          )}
+          {billingActionMessage && (
+            <div className={`rounded-xl px-3 py-2 text-sm font-medium ${
+              billingActionMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              {billingActionMessage.text}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-3 pt-1">
+            {billingStatus === 'billing_pending' && billingConfig?.checkoutEnabled && (
+              <button
+                type="button"
+                onClick={handleStartPayPalCheckout}
+                disabled={startingCheckout}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-white font-bold hover:bg-teal-700 transition-colors disabled:opacity-50"
+              >
+                {startingCheckout ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                {startingCheckout ? 'Opening PayPal...' : 'Set Up PayPal Billing'}
+              </button>
+            )}
+            {(activeWorkspace.workspace.paypalSubscriptionId || activeWorkspace.workspace.paypalSubscriptionStatus === 'pending_approval') && (
+              <button
+                type="button"
+                onClick={() => handleRefreshBilling()}
+                disabled={refreshingBilling}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-slate-800 font-bold hover:bg-slate-200 transition-colors disabled:opacity-50"
+              >
+                {refreshingBilling ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {refreshingBilling ? 'Refreshing...' : 'Refresh PayPal Status'}
+              </button>
+            )}
+            {activeWorkspace.workspace.paypalSubscriptionId && activeWorkspace.workspace.paypalSubscriptionStatus !== 'cancelled' && (
+              <button
+                type="button"
+                onClick={handleCancelBilling}
+                disabled={cancellingBilling}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-50 px-4 py-3 text-rose-700 font-bold hover:bg-rose-100 transition-colors disabled:opacity-50"
+              >
+                {cancellingBilling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                {cancellingBilling ? 'Cancelling...' : 'Cancel PayPal Billing'}
+              </button>
+            )}
+          </div>
+          {!billingConfig?.checkoutEnabled && (
+            <div className="text-sm text-slate-500">
+              PayPal checkout is still disabled by the platform admin, so this workspace remains active in billing pending mode for now.
+            </div>
+          )}
+          {billingConfig && (
+            <div className="text-xs text-slate-400 uppercase tracking-[0.16em]">
+              PayPal mode: {billingConfig.isLive ? 'Live' : 'Sandbox'}
+            </div>
+          )}
+        </div>
+      </div>
+      )}
 
       {isAdmin && (
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">

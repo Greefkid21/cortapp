@@ -1,7 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AppUser } from '../types';
+import { AppUser, PlatformRole, WorkspaceAccessSummary, WorkspaceMembershipRole } from '../types';
 import { supabase } from '../lib/supabase';
 import { sendEmailNotification } from '../lib/notifications';
+
+function workspaceRoleToAppRole(role: WorkspaceMembershipRole): AppUser['role'] {
+  return role === 'viewer' ? 'viewer' : 'admin';
+}
+
+function appRoleToWorkspaceRole(role: AppUser['role']): WorkspaceMembershipRole {
+  return role === 'admin' ? 'admin' : 'viewer';
+}
 
 interface AuthContextType {
   user: AppUser | null;
@@ -9,6 +17,12 @@ interface AuthContextType {
   actualIsAdmin: boolean;
   viewerPreview: boolean;
   users: AppUser[];
+  workspaces: WorkspaceAccessSummary[];
+  activeWorkspace: WorkspaceAccessSummary | null;
+  workspaceRole: WorkspaceMembershipRole | null;
+  platformRole: PlatformRole;
+  hasWorkspaceAdminAccess: boolean;
+  createWorkspace: (workspaceName: string, slug?: string) => Promise<{ success: boolean; workspaceId?: string; error?: string }>;
   login: (email: string, password?: string) => Promise<boolean>;
   signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginWithMagicLink: (email: string) => Promise<boolean>;
@@ -21,6 +35,7 @@ interface AuthContextType {
   refreshUsers: () => Promise<number>;
   checkUserDbValue: (id: string) => Promise<any>;
   setViewerPreview: (enabled: boolean) => void;
+  setActiveWorkspaceId: (workspaceId: string | null) => void;
   buildPath: (path: string) => string;
   loading: boolean;
 }
@@ -30,48 +45,159 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceAccessSummary[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(() => localStorage.getItem('cortapp_active_workspace_id'));
   const [loading, setLoading] = useState(true);
   const [viewerPreview, setViewerPreview] = useState(false);
 
+  const setActiveWorkspaceId = (workspaceId: string | null) => {
+    setActiveWorkspaceIdState(workspaceId);
+    if (workspaceId) {
+      localStorage.setItem('cortapp_active_workspace_id', workspaceId);
+    } else {
+      localStorage.removeItem('cortapp_active_workspace_id');
+    }
+  };
+
+  const loadWorkspaceAccess = async (userId: string) => {
+    if (!supabase) return [] as WorkspaceAccessSummary[];
+
+    const { data, error } = await supabase
+      .from('workspace_memberships')
+      .select(`
+        id,
+        workspace_id,
+        user_id,
+        role,
+        player_id,
+        workspace:workspaces (
+          id,
+          name,
+          slug,
+          billing_status,
+          billing_plan,
+          is_billing_exempt,
+          billing_exempt_reason,
+          grace_period_ends_at,
+          billing_pending_started_at,
+          owner_user_id,
+          paypal_subscription_status,
+          paypal_subscription_id,
+          paypal_plan_id,
+          paypal_payer_id,
+          paypal_subscription_started_at,
+          paypal_subscription_ends_at,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.warn('Workspace access not available yet:', error.message);
+      return [] as WorkspaceAccessSummary[];
+    }
+
+    const mapped = (data || [])
+      .map((item: any) => {
+        if (!item.workspace) return null;
+
+        return {
+          workspace: {
+            id: item.workspace.id,
+            name: item.workspace.name,
+            slug: item.workspace.slug,
+            billingStatus: item.workspace.billing_status,
+            billingPlan: item.workspace.billing_plan,
+            isBillingExempt: item.workspace.is_billing_exempt,
+            billingExemptReason: item.workspace.billing_exempt_reason,
+            gracePeriodEndsAt: item.workspace.grace_period_ends_at,
+            billingPendingStartedAt: item.workspace.billing_pending_started_at,
+            ownerUserId: item.workspace.owner_user_id,
+            paypalSubscriptionStatus: item.workspace.paypal_subscription_status,
+            paypalSubscriptionId: item.workspace.paypal_subscription_id,
+            paypalPlanId: item.workspace.paypal_plan_id,
+            paypalPayerId: item.workspace.paypal_payer_id,
+            paypalSubscriptionStartedAt: item.workspace.paypal_subscription_started_at,
+            paypalSubscriptionEndsAt: item.workspace.paypal_subscription_ends_at,
+            createdAt: item.workspace.created_at,
+            updatedAt: item.workspace.updated_at,
+          },
+          membershipRole: item.role,
+          playerId: item.player_id || undefined,
+        } as WorkspaceAccessSummary;
+      })
+      .filter(Boolean) as WorkspaceAccessSummary[];
+
+    setWorkspaces(mapped);
+
+    const preferred = mapped.find((entry) => entry.workspace.id === activeWorkspaceId) || mapped[0] || null;
+    if (preferred?.workspace.id !== activeWorkspaceId) {
+      setActiveWorkspaceId(preferred?.workspace.id || null);
+    }
+
+    return mapped;
+  };
+
   // Define fetchUsers outside useEffect so it can be exposed
   const fetchUsers = async () => {
-    // Determine if we should fetch: must have supabase and be admin
-    // If user state is not yet loaded but we have a session, we might need to rely on session check?
-    // But user role is needed.
     if (!supabase) return 0;
-    
-    if (user?.role === 'admin') {
-      console.log('Fetching users...');
-      const { data: profiles, error } = await supabase
+
+    const currentWorkspaceId = activeWorkspaceId || workspaces[0]?.workspace.id;
+    const currentWorkspaceRole = workspaces.find((entry) => entry.workspace.id === currentWorkspaceId)?.membershipRole;
+    const canManageUsers =
+      user?.platformRole === 'platform_admin' ||
+      user?.role === 'admin' ||
+      currentWorkspaceRole === 'owner_admin' ||
+      currentWorkspaceRole === 'admin';
+
+    if (!currentWorkspaceId || !canManageUsers) {
+      setUsers([]);
+      return 0;
+    }
+
+    const { data: memberships, error: membershipError } = await supabase
+      .from('workspace_memberships')
+      .select('user_id, role, player_id')
+      .eq('workspace_id', currentWorkspaceId);
+
+    if (membershipError) {
+      console.error('Error fetching workspace memberships:', membershipError);
+      return 0;
+    }
+
+    const userIds = Array.from(new Set((memberships || []).map((membership: any) => membership.user_id).filter(Boolean)));
+
+    let profilesById = new Map<string, any>();
+    if (userIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, email, role, status, player_id');
-        
-      if (error) {
-        console.error('Error fetching users:', error);
-        // Alert admin on error to help debug
-        if (user.id !== 'admin-local') {
-             // alert('Sync Error: Failed to fetch users. ' + error.message);
-        }
+        .select('id, email, status, platform_role')
+        .in('id', userIds);
+
+      if (profilesError) {
+        console.error('Error fetching workspace profiles:', profilesError);
         return 0;
       }
 
-      if (profiles) {
-        console.log(`Fetched ${profiles.length} profiles`);
-        const mappedUsers: AppUser[] = profiles.map(p => ({
-          id: p.id,
-          email: p.email,
-          name: p.email.split('@')[0],
-          role: p.role,
-          status: p.status,
-          playerId: p.player_id
-        }));
-        setUsers(mappedUsers);
-        return mappedUsers.length;
-      }
-    } else {
-        console.log('Skipping fetchUsers: Not admin or no supabase', { role: user?.role });
+      profilesById = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
     }
-    return 0;
+
+    const mappedUsers: AppUser[] = (memberships || []).map((membership: any) => {
+      const profile = profilesById.get(membership.user_id);
+      return {
+        id: membership.user_id,
+        email: profile?.email || 'Invited user',
+        name: profile?.email?.split('@')[0] || 'User',
+        role: workspaceRoleToAppRole(membership.role),
+        platformRole: profile?.platform_role || 'user',
+        status: profile?.status || 'active',
+        playerId: membership.player_id || undefined,
+      };
+    });
+
+    setUsers(mappedUsers);
+    return mappedUsers.length;
   };
 
   // Load initial session
@@ -104,9 +230,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 email: session.user.email || '',
                 name: session.user.email?.split('@')[0] || 'User',
                 role: profile.role,
+                platformRole: profile.platform_role || 'user',
                 status: profile.status,
                 playerId: profile.player_id
               });
+              await loadWorkspaceAccess(session.user.id);
             } else if (error && error.code === 'PGRST116') {
               // Only create new profile if it genuinely doesn't exist (PGRST116)
               console.log('Profile not found, creating new viewer profile...');
@@ -130,6 +258,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 name: session.user.email?.split('@')[0] || 'User',
                 playerId: undefined
               });
+              setWorkspaces([]);
             }
           }
           
@@ -152,9 +281,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   email: session.user.email || '',
                   name: session.user.email?.split('@')[0] || 'User',
                   role: profile.role,
+                  platformRole: profile.platform_role || 'user',
                   status: profile.status,
                   playerId: profile.player_id
                 });
+                await loadWorkspaceAccess(session.user.id);
               } else if (error && error.code === 'PGRST116') {
                  // Only create new profile if it genuinely doesn't exist
                  console.log('Profile not found (auth change), creating new viewer profile...');
@@ -178,6 +309,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                    name: session.user.email?.split('@')[0] || 'User',
                    playerId: undefined
                  });
+                 setWorkspaces([]);
               }
             } else {
               // Check for local admin fallback when Supabase session is cleared/missing
@@ -192,6 +324,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 });
               } else {
                 setUser(null);
+                setWorkspaces([]);
+                setActiveWorkspaceId(null);
               }
             }
             setLoading(false);
@@ -228,12 +362,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fetch all users (for admin)
   useEffect(() => {
     fetchUsers();
-  }, [user]);
+  }, [user, activeWorkspaceId, workspaces.length]);
 
   // Auto-refresh on window focus (for mobile switching)
   useEffect(() => {
     const handleFocus = () => {
-      if (user?.role === 'admin') {
+      const currentWorkspaceRole = workspaces.find((entry) => entry.workspace.id === (activeWorkspaceId || workspaces[0]?.workspace.id))?.membershipRole;
+      if (user?.role === 'admin' || currentWorkspaceRole === 'owner_admin' || currentWorkspaceRole === 'admin') {
         console.log('App focused, refreshing users...');
         fetchUsers();
       }
@@ -241,7 +376,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [user]);
+  }, [user, activeWorkspaceId, workspaces]);
 
   // Real-time subscription for profile updates
   useEffect(() => {
@@ -263,15 +398,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             // 1. Update current user if it matches
             setUser((currentUser: AppUser | null) => {
-              if (currentUser?.id === updatedProfile.id) {
-                return {
-                  ...currentUser,
-                  role: updatedProfile.role,
-                  status: updatedProfile.status,
-                  playerId: updatedProfile.player_id || undefined
-                } as AppUser;
+              if (!currentUser || currentUser.id !== updatedProfile.id) {
+                return currentUser;
               }
-              return currentUser;
+
+              const existingPlatformRole = currentUser.platformRole || 'user';
+              return {
+                ...currentUser,
+                role: updatedProfile.role,
+                platformRole: updatedProfile.platform_role || existingPlatformRole,
+                status: updatedProfile.status,
+                playerId: updatedProfile.player_id || undefined
+              } as AppUser;
             });
 
             // 2. Update users list if we have it
@@ -283,6 +421,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 return currentUsers.map(u => u.id === updatedProfile.id ? {
                   ...u,
                   role: updatedProfile.role,
+                  platformRole: updatedProfile.platform_role || u.platformRole || 'user',
                   status: updatedProfile.status,
                   playerId: updatedProfile.player_id || undefined
                 } as AppUser : u);
@@ -302,6 +441,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: newProfile.email,
               name: newProfile.email?.split('@')[0] || 'User',
               role: newProfile.role,
+              platformRole: newProfile.platform_role || 'user',
               status: newProfile.status,
               playerId: newProfile.player_id || undefined
             };
@@ -320,6 +460,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
              // But we can update local state if needed.
              setUser((currentUser: AppUser | null) => {
                 if (currentUser?.id === deletedId) {
+                    setWorkspaces([]);
+                    setActiveWorkspaceId(null);
                     return null;
                 }
                 return currentUser;
@@ -349,6 +491,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: 'active'
         };
         setUser(localAdmin);
+        setWorkspaces([]);
         localStorage.setItem('cortapp_user_id', 'admin-local');
         return true;
     }
@@ -453,16 +596,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const createWorkspace = async (workspaceName: string, slug?: string) => {
+    if (!supabase || !user) {
+      return { success: false, error: 'You must be logged in to create a workspace.' };
+    }
+
+    const { data, error } = await supabase.rpc('create_workspace_for_owner', {
+      workspace_name: workspaceName,
+      requested_slug: slug || null,
+    });
+
+    if (error) {
+      console.error('Error creating workspace:', error);
+      return { success: false, error: error.message };
+    }
+
+    await loadWorkspaceAccess(user.id);
+    if (data) {
+      setActiveWorkspaceId(data);
+    }
+
+    return { success: true, workspaceId: data };
+  };
+
   const inviteUser = async (email: string, role: AppUser['role'], playerId?: string): Promise<{ success: boolean; emailSent: boolean; message?: string }> => {
     if (supabase) {
+      if (!activeWorkspaceId) {
+        return { success: false, emailSent: false, message: 'No active workspace selected.' };
+      }
+
       // 1. Store invite in user_invites table
       const { error: inviteError } = await supabase
         .from('user_invites')
-        .insert([{ email, role, player_id: playerId }]);
+        .insert([{ workspace_id: activeWorkspaceId, email, role, player_id: playerId }]);
         
       if (inviteError) {
         console.error('Error creating invite:', inviteError);
         return { success: false, emailSent: false, message: inviteError.message };
+      }
+
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id, email, status, platform_role')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (existingProfile?.id) {
+        const { error: membershipError } = await supabase
+          .from('workspace_memberships')
+          .upsert({
+            workspace_id: activeWorkspaceId,
+            user_id: existingProfile.id,
+            role: appRoleToWorkspaceRole(role),
+            player_id: playerId || null,
+          }, { onConflict: 'workspace_id,user_id' });
+
+        if (membershipError) {
+          console.error('Error creating workspace membership:', membershipError);
+          return { success: false, emailSent: false, message: membershipError.message };
+        }
       }
 
       // 2. Send magic link via Supabase (primary auth method)
@@ -492,11 +684,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Refresh users list (optimistic update)
       const newUser: AppUser = {
-        id: 'pending-' + Math.random(),
+        id: existingProfile?.id || ('pending-' + Math.random()),
         email,
         name: email.split('@')[0],
         role,
-        status: 'invited',
+        platformRole: existingProfile?.platform_role || 'user',
+        status: existingProfile ? (existingProfile.status || 'active') : 'invited',
         playerId
       };
       setUsers([...users, newUser]);
@@ -514,6 +707,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         name: email.split('@')[0], // Default name from email
         role,
+        platformRole: 'user',
         status: 'invited',
         playerId
       };
@@ -524,9 +718,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteUser = async (id: string) => {
     if (supabase) {
-      // Admin only - delete from profiles (and ideally auth.users via Edge Function, but we can't do that from client)
-      // For now, we'll just soft-delete or delete profile
-      await supabase.from('profiles').delete().eq('id', id);
+      if (!activeWorkspaceId) return;
+      await supabase.from('workspace_memberships').delete().eq('workspace_id', activeWorkspaceId).eq('user_id', id);
       setUsers(users.filter(u => u.id !== id));
     } else {
       setUsers(users.filter(u => u.id !== id));
@@ -547,70 +740,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserProfile = async (id: string, updates: { role?: AppUser['role'], playerId?: string | null }) => {
     if (supabase) {
-      const updateData: any = {};
-      if (updates.role) updateData.role = updates.role;
-      if (updates.playerId !== undefined) updateData.player_id = updates.playerId; // Allow null to unlink
+      if (!activeWorkspaceId) {
+        throw new Error('No active workspace selected.');
+      }
 
-      const { data, error } = await supabase.from('profiles').update(updateData).eq('id', id).select();
+      const updateData: any = {};
+      if (updates.role) updateData.role = appRoleToWorkspaceRole(updates.role);
+      if (updates.playerId !== undefined) updateData.player_id = updates.playerId;
+
+      const { error } = await supabase
+        .from('workspace_memberships')
+        .update(updateData)
+        .eq('workspace_id', activeWorkspaceId)
+        .eq('user_id', id);
 
       if (error) {
         console.error('Error updating user profile:', error);
         throw error;
-      }
-
-      if (!data || data.length === 0) {
-          console.warn('Update succeeded but no data returned. Possible RLS blocking.');
-          alert('Update failed: You might not have permission to update this user. Please check database policies.');
-          return;
-      }
-
-      // Verify that the updates were actually applied
-      const updatedRecord = data[0];
-      let mismatch = false;
-      if (updates.role && updatedRecord.role !== updates.role) mismatch = true;
-      if (updates.playerId !== undefined && updatedRecord.player_id !== updates.playerId) mismatch = true;
-
-      if (mismatch) {
-          console.warn('Update mismatch:', { expected: updates, got: updatedRecord });
-          alert('Update warning: The database accepted the update but the values did not change. This might be due to database triggers or permissions.');
-          // We should still update local state to match DB or revert? 
-          // Reverting to DB state is safer.
-          setUsers(prev => prev.map(u => (u.id === id ? { 
-              ...u, 
-              role: updatedRecord.role,
-              playerId: updatedRecord.player_id || undefined,
-              status: updatedRecord.status
-          } : u)));
-          return;
-      }
-      
-      // Double check by re-fetching (to catch AFTER triggers)
-      // Wait a small delay to ensure any async triggers have fired
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const { data: verifyData } = await supabase
-          .from('profiles')
-          .select('player_id, role')
-          .eq('id', id)
-          .single();
-
-      if (verifyData) {
-          let doubleCheckMismatch = false;
-          if (updates.role && verifyData.role !== updates.role) doubleCheckMismatch = true;
-          if (updates.playerId !== undefined && verifyData.player_id !== updates.playerId) doubleCheckMismatch = true;
-          
-          if (doubleCheckMismatch) {
-              console.warn('Double-check mismatch:', { expected: updates, got: verifyData });
-              alert(`Update warning: The database initially accepted the update, but a subsequent check shows the value reverted.\n\nExpected PlayerID: ${updates.playerId}\nActual PlayerID: ${verifyData.player_id}\n\nThis is likely due to a database trigger or conflicting rule.`);
-              // Revert local state
-              setUsers(prev => prev.map(u => (u.id === id ? { 
-                  ...u, 
-                  role: verifyData.role,
-                  playerId: verifyData.player_id || undefined,
-                  status: u.status // verifyData doesn't have status, keep old
-              } : u)));
-              return;
-          }
       }
 
       setUsers(prev => prev.map(u => (u.id === id ? { 
@@ -651,7 +797,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
-  const actualIsAdmin = user?.role === 'admin';
+  const activeWorkspace = workspaces.find((entry) => entry.workspace.id === activeWorkspaceId) || workspaces[0] || null;
+  const workspaceRole = activeWorkspace?.membershipRole || null;
+  const platformRole = user?.platformRole || 'user';
+  const hasWorkspaceAdminAccess = platformRole === 'platform_admin' || workspaceRole === 'owner_admin' || workspaceRole === 'admin';
+  const actualIsAdmin = (user?.role === 'admin') || hasWorkspaceAdminAccess;
   const isAdmin = actualIsAdmin && !viewerPreview;
 
   const buildPath = (path: string) => {
@@ -672,7 +822,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, actualIsAdmin, viewerPreview, users, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, checkUserDbValue, setViewerPreview, buildPath, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, actualIsAdmin, viewerPreview, users, workspaces, activeWorkspace, workspaceRole, platformRole, hasWorkspaceAdminAccess, createWorkspace, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, checkUserDbValue, setViewerPreview, setActiveWorkspaceId, buildPath, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -57,6 +57,7 @@ They will also need:
 - auth provider settings
 - edge function access if email notifications are required
 - project ref if using Supabase CLI
+- the PayPal billing setup guide in `docs/PAYPAL_BILLING_SETUP.md` if the paid club product is being deployed
 
 ## 5. Email Notifications
 
@@ -69,6 +70,13 @@ If email notifications are needed, also provide:
 The related function is here:
 
 - `supabase/functions/send-email`
+
+If the paid club billing model is being used, also provide:
+
+- PayPal account ownership or access
+- Supabase secrets access for PayPal credentials
+- access to the webhook configuration in PayPal
+- the deployment runbook in `docs/PAYPAL_BILLING_SETUP.md`
 
 ## 6. Deployment Notes
 
@@ -118,4 +126,5 @@ Before sending to developers, provide all of the following:
 - Supabase project access or rebuild instructions
 - domain/deployment expectations
 - Cort Club branding direction
+- PayPal billing deployment notes if the paid club product is included
 - any outstanding feature notes or known issues
