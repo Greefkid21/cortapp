@@ -24,7 +24,7 @@ interface AuthContextType {
   hasWorkspaceAdminAccess: boolean;
   createWorkspace: (workspaceName: string, slug?: string) => Promise<{ success: boolean; workspaceId?: string; error?: string }>;
   login: (email: string, password?: string) => Promise<boolean>;
-  signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string) => Promise<{ success: boolean; error?: string; autoSignedIn?: boolean; requiresEmailConfirmation?: boolean }>;
   loginWithMagicLink: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
   inviteUser: (email: string, role: AppUser['role'], playerId?: string) => Promise<{ success: boolean; emailSent: boolean; message?: string }>;
@@ -557,7 +557,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
              // If profile creation fails, we might want to clean up auth user, but for now just report error
         }
         
-        return { success: true };
+        return {
+          success: true,
+          autoSignedIn: !!data.session,
+          requiresEmailConfirmation: !data.session,
+        };
       }
       return { success: false, error: 'User creation failed' };
     }

@@ -9,6 +9,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [signupPendingConfirmation, setSignupPendingConfirmation] = useState(false);
   const { login, signup, loginWithMagicLink, resetPassword } = useAuth();
   const navigate = useNavigate();
 
@@ -16,6 +17,7 @@ export function Login() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setSignupPendingConfirmation(false);
 
     if (mode === 'signup') {
       if (!email || !password) {
@@ -24,13 +26,17 @@ export function Login() {
       }
       const result = await signup(email, password);
       if (result.success) {
-        setSuccess('Account created! Please check your email to verify your account, or try logging in.');
-        
-        // Try to login immediately just in case verification is off
-        const loginSuccess = await login(email, password);
-        if (loginSuccess) {
-             navigate('/');
+        if (result.autoSignedIn) {
+          navigate('/');
+          return;
         }
+
+        setSignupPendingConfirmation(!!result.requiresEmailConfirmation);
+        setSuccess(
+          result.requiresEmailConfirmation
+            ? 'Account created. Supabase now needs to send a verification email before the account can sign in. If nothing arrives after a few minutes, the admin likely needs to check Supabase email settings.'
+            : 'Account created successfully.'
+        );
       } else {
         setError(result.error || 'Failed to sign up');
       }
@@ -186,6 +192,9 @@ export function Login() {
                   className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-medium"
                   />
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Verification emails are sent by Supabase Auth, not by this app directly.
+              </p>
             </div>
           )}
           
@@ -204,6 +213,20 @@ export function Login() {
           {success && (
             <div className="p-3 bg-green-50 text-green-600 text-sm rounded-xl font-medium">
               {success}
+            </div>
+          )}
+
+          {signupPendingConfirmation && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              <div>
+                No email yet? Check your junk folder first. If it still does not arrive, the next place to check is Supabase:
+              </div>
+              <div className="mt-2 font-medium">
+                Authentication {'>'} Providers {'>'} Email
+              </div>
+              <div className="mt-1">
+                Confirm the Email provider is enabled and that email delivery is configured correctly.
+              </div>
             </div>
           )}
 
@@ -230,6 +253,16 @@ export function Login() {
                 className="w-full text-slate-500 text-sm font-bold hover:text-slate-800 mt-2"
             >
                 Back to Login
+            </button>
+          )}
+
+          {signupPendingConfirmation && (
+            <button
+              type="button"
+              onClick={() => { setMode('magic-link'); setError(''); setSuccess(''); setSignupPendingConfirmation(false); }}
+              className="w-full text-slate-500 text-sm font-bold hover:text-slate-800"
+            >
+              Try Magic Link Instead
             </button>
           )}
         </form>
