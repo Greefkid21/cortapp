@@ -12,7 +12,7 @@ function slugify(value: string) {
 }
 
 export function WorkspaceOnboarding() {
-  const { user, createWorkspace } = useAuth();
+  const { user, createWorkspace, logout } = useAuth();
   const [workspaceName, setWorkspaceName] = useState('');
   const [customSlug, setCustomSlug] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -104,6 +104,14 @@ export function WorkspaceOnboarding() {
               className="w-full bg-accent text-black py-3 rounded-xl font-black hover:bg-[#f4dc00] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? 'Creating Workspace...' : 'Create My League Workspace'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="w-full text-slate-500 text-sm font-bold hover:text-slate-800"
+            >
+              Sign Out
             </button>
           </form>
         </div>
