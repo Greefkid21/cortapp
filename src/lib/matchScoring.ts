@@ -9,12 +9,53 @@ export function isValidDrawnFinalSetScore(t1: number, t2: number) {
   return t1 === 6 && t2 === 6;
 }
 
+export function isValidUnfinishedSetScore(t1: number, t2: number) {
+  if (!Number.isFinite(t1) || !Number.isFinite(t2)) return false;
+  if (t1 < 0 || t2 < 0) return false;
+  if (t1 > 6 || t2 > 6) return false;
+  if (t1 === t2) return false;
+  if (isEmptySetScore(t1, t2)) return false;
+  if (isValidCompletedSetScore(t1, t2)) return false;
+  return true;
+}
+
 function isAllowedDrawnFinalSet(
   sets: Array<{ team1: number; team2: number }>,
   setIndex: number
 ) {
   const set = sets[setIndex];
   if (!set || !isValidDrawnFinalSetScore(Number(set.team1 ?? 0), Number(set.team2 ?? 0))) {
+    return false;
+  }
+
+  let lastPlayedSetIndex = -1;
+  for (let i = 0; i < sets.length; i++) {
+    const s1 = Number(sets[i]?.team1 ?? 0);
+    const s2 = Number(sets[i]?.team2 ?? 0);
+    if (!isEmptySetScore(s1, s2)) {
+      lastPlayedSetIndex = i;
+    }
+  }
+
+  if (setIndex !== lastPlayedSetIndex) return false;
+
+  for (let i = 0; i < setIndex; i++) {
+    const s1 = Number(sets[i]?.team1 ?? 0);
+    const s2 = Number(sets[i]?.team2 ?? 0);
+    if (isValidCompletedSetScore(s1, s2)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isAllowedUnfinishedFinalSet(
+  sets: Array<{ team1: number; team2: number }>,
+  setIndex: number
+) {
+  const set = sets[setIndex];
+  if (!set || !isValidUnfinishedSetScore(Number(set.team1 ?? 0), Number(set.team2 ?? 0))) {
     return false;
   }
 
@@ -84,8 +125,16 @@ export function validateMatchScoreInput(sets: Array<{ t1: number; t2: number }>,
       continue;
     }
 
+    const isUnfinishedFinalSet = i === 1 && isValidUnfinishedSetScore(t1, t2);
+    if (isUnfinishedFinalSet) {
+      if (completedSetWinners.length === 0) {
+        return { ok: false, message: 'An unfinished final set is only allowed after an earlier set has a winner.' };
+      }
+      continue;
+    }
+
     if (!isValidCompletedSetScore(t1, t2)) {
-      return { ok: false, message: `Set ${i + 1} score ${t1}-${t2} is not a completed set. Valid examples: 6-4, 7-5, 7-6.` };
+      return { ok: false, message: `Set ${i + 1} score ${t1}-${t2} is not valid. Use a completed set like 6-4, 7-5, 7-6, or an unfinished final set like 6-5 when time runs out.` };
     }
   }
 
@@ -119,6 +168,12 @@ export function calculateMatchStats(match: Match) {
     if (isEmptySetScore(s1, s2)) return;
 
     if (isAllowedDrawnFinalSet(match.sets, index)) {
+      t1Games += s1;
+      t2Games += s2;
+      return;
+    }
+
+    if (isAllowedUnfinishedFinalSet(match.sets, index)) {
       t1Games += s1;
       t2Games += s2;
       return;

@@ -139,6 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return mapped;
   };
 
+  const ensureInvitedWorkspaceMembership = async () => {
+    if (!supabase) return;
+
+    const { error } = await supabase.rpc('ensure_workspace_membership_for_current_user');
+    if (error) {
+      console.warn('Unable to ensure invited workspace membership:', error.message);
+    }
+  };
+
   // Define fetchUsers outside useEffect so it can be exposed
   const fetchUsers = async () => {
     if (!supabase) return 0;
@@ -225,6 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
               
             if (profile) {
+              await ensureInvitedWorkspaceMembership();
               setUser({
                 id: session.user.id,
                 email: session.user.email || '',
@@ -276,6 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
                 
               if (profile) {
+                await ensureInvitedWorkspaceMembership();
                 setUser({
                   id: session.user.id,
                   email: session.user.email || '',
