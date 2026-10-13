@@ -65,76 +65,128 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadWorkspaceAccess = async (userId: string) => {
     if (!supabase) return [] as WorkspaceAccessSummary[];
 
-    const { data, error } = await supabase
-      .from('workspace_memberships')
-      .select(`
+    const mapWorkspaceAccess = (rows: any[]) => (
+      (rows || [])
+        .map((item: any) => {
+          if (!item.workspace) return null;
+
+          return {
+            workspace: {
+              id: item.workspace.id,
+              name: item.workspace.name,
+              slug: item.workspace.slug,
+              leagueNumber: item.workspace.league_number || undefined,
+              selfJoinEnabled: item.workspace.self_join_enabled ?? undefined,
+              billingStatus: item.workspace.billing_status,
+              billingPlan: item.workspace.billing_plan,
+              isBillingExempt: item.workspace.is_billing_exempt,
+              billingExemptReason: item.workspace.billing_exempt_reason,
+              gracePeriodEndsAt: item.workspace.grace_period_ends_at,
+              billingPendingStartedAt: item.workspace.billing_pending_started_at,
+              ownerUserId: item.workspace.owner_user_id,
+              paypalSubscriptionStatus: item.workspace.paypal_subscription_status,
+              paypalSubscriptionId: item.workspace.paypal_subscription_id,
+              paypalPlanId: item.workspace.paypal_plan_id,
+              paypalPayerId: item.workspace.paypal_payer_id,
+              paypalSubscriptionStartedAt: item.workspace.paypal_subscription_started_at,
+              paypalSubscriptionEndsAt: item.workspace.paypal_subscription_ends_at,
+              createdAt: item.workspace.created_at,
+              updatedAt: item.workspace.updated_at,
+            },
+            membershipRole: item.role,
+            playerId: item.player_id || undefined,
+          } as WorkspaceAccessSummary;
+        })
+        .filter(Boolean) as WorkspaceAccessSummary[]
+    );
+
+    const workspaceSelect = `
+      id,
+      workspace_id,
+      user_id,
+      role,
+      player_id,
+      workspace:workspaces (
         id,
-        workspace_id,
-        user_id,
-        role,
-        player_id,
-        workspace:workspaces (
-          id,
-          name,
-          slug,
-          league_number,
-          self_join_enabled,
-          billing_status,
-          billing_plan,
-          is_billing_exempt,
-          billing_exempt_reason,
-          grace_period_ends_at,
-          billing_pending_started_at,
-          owner_user_id,
-          paypal_subscription_status,
-          paypal_subscription_id,
-          paypal_plan_id,
-          paypal_payer_id,
-          paypal_subscription_started_at,
-          paypal_subscription_ends_at,
-          created_at,
-          updated_at
-        )
-      `)
+        name,
+        slug,
+        league_number,
+        self_join_enabled,
+        billing_status,
+        billing_plan,
+        is_billing_exempt,
+        billing_exempt_reason,
+        grace_period_ends_at,
+        billing_pending_started_at,
+        owner_user_id,
+        paypal_subscription_status,
+        paypal_subscription_id,
+        paypal_plan_id,
+        paypal_payer_id,
+        paypal_subscription_started_at,
+        paypal_subscription_ends_at,
+        created_at,
+        updated_at
+      )
+    `;
+
+    const legacyWorkspaceSelect = `
+      id,
+      workspace_id,
+      user_id,
+      role,
+      player_id,
+      workspace:workspaces (
+        id,
+        name,
+        slug,
+        billing_status,
+        billing_plan,
+        is_billing_exempt,
+        billing_exempt_reason,
+        grace_period_ends_at,
+        billing_pending_started_at,
+        owner_user_id,
+        paypal_subscription_status,
+        paypal_subscription_id,
+        paypal_plan_id,
+        paypal_payer_id,
+        paypal_subscription_started_at,
+        paypal_subscription_ends_at,
+        created_at,
+        updated_at
+      )
+    `;
+
+    const primaryResult = await supabase
+      .from('workspace_memberships')
+      .select(workspaceSelect)
       .eq('user_id', userId);
+
+    let data: any[] | null = primaryResult.data as any[] | null;
+    let error: any = primaryResult.error;
+
+    const missingSelfServeColumns =
+      error?.message?.includes('league_number') ||
+      error?.message?.includes('self_join_enabled');
+
+    if (missingSelfServeColumns) {
+      console.warn('Workspace self-serve join columns are not available yet, falling back to legacy workspace access query.');
+      const legacyResult = await supabase
+        .from('workspace_memberships')
+        .select(legacyWorkspaceSelect)
+        .eq('user_id', userId);
+
+      data = legacyResult.data as any[] | null;
+      error = legacyResult.error;
+    }
 
     if (error) {
       console.warn('Workspace access not available yet:', error.message);
       return [] as WorkspaceAccessSummary[];
     }
 
-    const mapped = (data || [])
-      .map((item: any) => {
-        if (!item.workspace) return null;
-
-        return {
-          workspace: {
-            id: item.workspace.id,
-            name: item.workspace.name,
-            slug: item.workspace.slug,
-            leagueNumber: item.workspace.league_number || undefined,
-            selfJoinEnabled: item.workspace.self_join_enabled ?? undefined,
-            billingStatus: item.workspace.billing_status,
-            billingPlan: item.workspace.billing_plan,
-            isBillingExempt: item.workspace.is_billing_exempt,
-            billingExemptReason: item.workspace.billing_exempt_reason,
-            gracePeriodEndsAt: item.workspace.grace_period_ends_at,
-            billingPendingStartedAt: item.workspace.billing_pending_started_at,
-            ownerUserId: item.workspace.owner_user_id,
-            paypalSubscriptionStatus: item.workspace.paypal_subscription_status,
-            paypalSubscriptionId: item.workspace.paypal_subscription_id,
-            paypalPlanId: item.workspace.paypal_plan_id,
-            paypalPayerId: item.workspace.paypal_payer_id,
-            paypalSubscriptionStartedAt: item.workspace.paypal_subscription_started_at,
-            paypalSubscriptionEndsAt: item.workspace.paypal_subscription_ends_at,
-            createdAt: item.workspace.created_at,
-            updatedAt: item.workspace.updated_at,
-          },
-          membershipRole: item.role,
-          playerId: item.player_id || undefined,
-        } as WorkspaceAccessSummary;
-      })
-      .filter(Boolean) as WorkspaceAccessSummary[];
+    const mapped = mapWorkspaceAccess(data || []);
 
     setWorkspaces(mapped);
 
