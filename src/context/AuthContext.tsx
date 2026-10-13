@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AppUser, PlatformRole, WorkspaceAccessSummary, WorkspaceMembershipRole } from '../types';
+import { AppUser, JoinableWorkspace, PlatformRole, WorkspaceAccessSummary, WorkspaceMembershipRole } from '../types';
 import { supabase } from '../lib/supabase';
 import { sendEmailNotification } from '../lib/notifications';
 
@@ -22,6 +22,8 @@ interface AuthContextType {
   workspaceRole: WorkspaceMembershipRole | null;
   platformRole: PlatformRole;
   hasWorkspaceAdminAccess: boolean;
+  listJoinableWorkspaces: (searchTerm?: string) => Promise<JoinableWorkspace[]>;
+  joinWorkspace: (workspaceId: string) => Promise<{ success: boolean; error?: string }>;
   createWorkspace: (workspaceName: string, slug?: string) => Promise<{ success: boolean; workspaceId?: string; error?: string }>;
   login: (email: string, password?: string) => Promise<boolean>;
   signup: (email: string, password: string) => Promise<{ success: boolean; error?: string; autoSignedIn?: boolean; requiresEmailConfirmation?: boolean }>;
@@ -75,6 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id,
           name,
           slug,
+          league_number,
+          self_join_enabled,
           billing_status,
           billing_plan,
           is_billing_exempt,
@@ -108,6 +112,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: item.workspace.id,
             name: item.workspace.name,
             slug: item.workspace.slug,
+            leagueNumber: item.workspace.league_number || undefined,
+            selfJoinEnabled: item.workspace.self_join_enabled ?? undefined,
             billingStatus: item.workspace.billing_status,
             billingPlan: item.workspace.billing_plan,
             isBillingExempt: item.workspace.is_billing_exempt,
@@ -159,6 +165,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await ensureInvitedWorkspaceMembership();
     const entries = await loadWorkspaceAccess(user.id);
     return entries.length;
+  };
+
+  const listJoinableWorkspaces = async (searchTerm?: string) => {
+    if (!supabase || !user) return [] as JoinableWorkspace[];
+
+    const { data, error } = await supabase.rpc('list_joinable_workspaces', {
+      search_term: searchTerm?.trim() ? searchTerm.trim() : null,
+    });
+
+    if (error) {
+      console.error('Error loading joinable workspaces:', error);
+      return [] as JoinableWorkspace[];
+    }
+
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+      leagueNumber: Number(item.league_number),
+    })) as JoinableWorkspace[];
+  };
+
+  const joinWorkspace = async (workspaceId: string) => {
+    if (!supabase || !user) {
+      return { success: false, error: 'You must be signed in to join a league.' };
+    }
+
+    const { error } = await supabase.rpc('join_workspace', {
+      requested_workspace_id: workspaceId,
+    });
+
+    if (error) {
+      console.error('Error joining workspace:', error);
+      return { success: false, error: error.message };
+    }
+
+    await refreshWorkspaceAccess();
+    return { success: true };
   };
 
   // Define fetchUsers outside useEffect so it can be exposed
@@ -857,7 +901,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, actualIsAdmin, viewerPreview, users, workspaces, activeWorkspace, workspaceRole, platformRole, hasWorkspaceAdminAccess, createWorkspace, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, refreshWorkspaceAccess, checkUserDbValue, setViewerPreview, setActiveWorkspaceId, buildPath, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, actualIsAdmin, viewerPreview, users, workspaces, activeWorkspace, workspaceRole, platformRole, hasWorkspaceAdminAccess, listJoinableWorkspaces, joinWorkspace, createWorkspace, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, refreshWorkspaceAccess, checkUserDbValue, setViewerPreview, setActiveWorkspaceId, buildPath, loading }}>
       {children}
     </AuthContext.Provider>
   );

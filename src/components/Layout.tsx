@@ -9,7 +9,7 @@ import { Logo } from './Logo';
 
 export function Layout() {
   const location = useLocation();
-  const { user, isAdmin, actualIsAdmin, viewerPreview, buildPath, logout, loading, activeWorkspace, platformRole } = useAuth();
+  const { user, isAdmin, actualIsAdmin, viewerPreview, buildPath, logout, loading, activeWorkspace, workspaces, setActiveWorkspaceId, platformRole } = useAuth();
   const { settings } = useSettings();
   const { messages, getUnreadCount } = useChat();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -102,9 +102,26 @@ export function Layout() {
                 </div>
               )}
               {activeWorkspace && (
-                <div className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-black flex items-center gap-1">
-                  <Building2 className="w-3 h-3" />
-                  {activeWorkspace.workspace.name}
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-black flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    {activeWorkspace.workspace.name}
+                    {activeWorkspace.workspace.leagueNumber ? ` #${activeWorkspace.workspace.leagueNumber}` : ''}
+                  </div>
+                  {user && workspaces.length > 1 && (
+                    <select
+                      value={activeWorkspace.workspace.id}
+                      onChange={(event) => setActiveWorkspaceId(event.target.value)}
+                      className="bg-white/5 border border-white/10 text-[10px] text-white/75 rounded-md px-2 py-1 outline-none"
+                      title="Switch league"
+                    >
+                      {workspaces.map((entry) => (
+                        <option key={entry.workspace.id} value={entry.workspace.id} className="text-slate-900">
+                          {entry.workspace.name}{entry.workspace.leagueNumber ? ` #${entry.workspace.leagueNumber}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
             </div>

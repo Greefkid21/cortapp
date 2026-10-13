@@ -3,14 +3,14 @@ import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PlatformBillingConfig } from '../types';
-import { Settings as SettingsIcon, Save, AlertCircle, BadgePoundSterling, CreditCard, Lock, Mail, Upload, Camera, Loader2, RefreshCw, XCircle, X as CloseIcon, Check } from 'lucide-react';
+import { Settings as SettingsIcon, Save, AlertCircle, BadgePoundSterling, CreditCard, Lock, Mail, Upload, Camera, Loader2, RefreshCw, XCircle, X as CloseIcon, Check, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Cropper from 'react-easy-crop';
 import { getCroppedImg } from '../lib/imageUtils';
 
 export function Settings() {
   const { settings, updateSettings } = useSettings();
-  const { user, isAdmin, viewerPreview, activeWorkspace, workspaceRole, platformRole } = useAuth();
+  const { user, isAdmin, viewerPreview, activeWorkspace, workspaceRole, platformRole, refreshWorkspaceAccess } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const canSeeBilling = !viewerPreview && (platformRole === 'platform_admin' || workspaceRole === 'owner_admin' || workspaceRole === 'admin');
   
@@ -41,6 +41,8 @@ export function Settings() {
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [refreshingBilling, setRefreshingBilling] = useState(false);
   const [cancellingBilling, setCancellingBilling] = useState(false);
+  const [updatingJoinAccess, setUpdatingJoinAccess] = useState(false);
+  const [joinAccessMessage, setJoinAccessMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -278,6 +280,7 @@ export function Settings() {
   const priceLine = billingConfig
     ? `${billingConfig.currency} ${billingConfig.monthlyPrice.toFixed(2)} / month`
     : null;
+  const canManageLeagueAccess = !viewerPreview && (workspaceRole === 'owner_admin' || workspaceRole === 'admin' || platformRole === 'platform_admin');
 
   const billingMessage = (() => {
     switch (billingStatus) {
@@ -324,6 +327,40 @@ export function Settings() {
       return;
     }
   }, [activeWorkspace?.workspace.id, handleRefreshBilling, searchParams, setSearchParams]);
+
+  const handleToggleSelfJoin = async () => {
+    if (!supabase || !activeWorkspace?.workspace.id) return;
+
+    setJoinAccessMessage(null);
+    setUpdatingJoinAccess(true);
+
+    try {
+      const nextValue = !(activeWorkspace.workspace.selfJoinEnabled ?? false);
+      const { error } = await supabase.rpc('update_workspace_self_join', {
+        target_workspace_id: activeWorkspace.workspace.id,
+        enabled: nextValue,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      await refreshWorkspaceAccess();
+      setJoinAccessMessage({
+        type: 'success',
+        text: nextValue
+          ? 'Players can now join this league themselves by choosing it from the sign-up access screen.'
+          : 'Self-serve joining has been turned off. Invite-based access still works.',
+      });
+    } catch (error: any) {
+      setJoinAccessMessage({
+        type: 'error',
+        text: error.message || 'Failed to update self-serve join access.',
+      });
+    } finally {
+      setUpdatingJoinAccess(false);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20">
@@ -472,6 +509,53 @@ export function Settings() {
               PayPal mode: {billingConfig.isLive ? 'Live' : 'Sandbox'}
             </div>
           )}
+        </div>
+      </div>
+      )}
+
+      {canManageLeagueAccess && activeWorkspace && (
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <Users className="w-5 h-5 text-primary" /> League Access
+        </h3>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <div className="text-sm text-slate-600">
+            League name: <span className="font-semibold text-slate-800">{activeWorkspace.workspace.name}</span>
+          </div>
+          <div className="text-sm text-slate-600">
+            Identifier: <span className="font-semibold text-slate-800">{activeWorkspace.workspace.slug}</span>
+          </div>
+          <div className="text-sm text-slate-600">
+            League number: <span className="font-semibold text-slate-800">#{activeWorkspace.workspace.leagueNumber ?? 'Pending migration'}</span>
+          </div>
+          <div className="text-sm text-slate-600">
+            Self-serve joining: <span className="font-semibold text-slate-800">{activeWorkspace.workspace.selfJoinEnabled ? 'On' : 'Off'}</span>
+          </div>
+          <div className="text-sm text-slate-500">
+            Players can still be invited directly, but when self-serve joining is on they can also sign up, search for this league by name, identifier, or league number, and join it themselves.
+          </div>
+          {joinAccessMessage && (
+            <div className={`rounded-xl px-3 py-2 text-sm font-medium ${
+              joinAccessMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              {joinAccessMessage.text}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleToggleSelfJoin}
+              disabled={updatingJoinAccess}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-white font-bold hover:bg-teal-700 transition-colors disabled:opacity-50"
+            >
+              {updatingJoinAccess ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+              {updatingJoinAccess
+                ? 'Updating Access...'
+                : !activeWorkspace.workspace.selfJoinEnabled
+                  ? 'Turn Self-Serve Joining On'
+                  : 'Turn Self-Serve Joining Off'}
+            </button>
+          </div>
         </div>
       </div>
       )}

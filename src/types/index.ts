@@ -9,6 +9,8 @@ export interface Workspace {
   id: string;
   name: string;
   slug: string;
+  leagueNumber?: number;
+  selfJoinEnabled?: boolean;
   billingStatus: WorkspaceBillingStatus;
   billingPlan: WorkspaceBillingPlan;
   isBillingExempt: boolean;
@@ -54,6 +56,13 @@ export interface WorkspaceAccessSummary {
   workspace: Workspace;
   membershipRole: WorkspaceMembershipRole;
   playerId?: string;
+}
+
+export interface JoinableWorkspace {
+  id: string;
+  name: string;
+  slug: string;
+  leagueNumber: number;
 }
 
 export interface Player {

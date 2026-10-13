@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Building2, RefreshCw, Sparkles, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { JoinableWorkspace } from '../types';
 
 function slugify(value: string) {
   return value
@@ -12,16 +13,40 @@ function slugify(value: string) {
 }
 
 export function WorkspaceOnboarding() {
-  const { user, createWorkspace, logout, refreshWorkspaceAccess } = useAuth();
+  const { user, createWorkspace, logout, refreshWorkspaceAccess, listJoinableWorkspaces, joinWorkspace } = useAuth();
   const [workspaceName, setWorkspaceName] = useState('');
   const [customSlug, setCustomSlug] = useState('');
+  const [leagueSearch, setLeagueSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(false);
+  const [joiningWorkspaceId, setJoiningWorkspaceId] = useState<string | null>(null);
+  const [loadingJoinableLeagues, setLoadingJoinableLeagues] = useState(false);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
   const [error, setError] = useState('');
   const [accessMessage, setAccessMessage] = useState('');
+  const [joinMessage, setJoinMessage] = useState('');
+  const [joinableLeagues, setJoinableLeagues] = useState<JoinableWorkspace[]>([]);
 
   const suggestedSlug = useMemo(() => slugify(customSlug || workspaceName), [customSlug, workspaceName]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadJoinableLeagues = async () => {
+      setLoadingJoinableLeagues(true);
+      const leagues = await listJoinableWorkspaces(leagueSearch);
+      if (active) {
+        setJoinableLeagues(leagues);
+        setLoadingJoinableLeagues(false);
+      }
+    };
+
+    loadJoinableLeagues();
+
+    return () => {
+      active = false;
+    };
+  }, [leagueSearch, user?.id]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -45,12 +70,27 @@ export function WorkspaceOnboarding() {
   const handleRefreshAccess = async () => {
     setError('');
     setAccessMessage('');
+    setJoinMessage('');
     setCheckingAccess(true);
     const workspaceCount = await refreshWorkspaceAccess();
     setCheckingAccess(false);
 
     if (workspaceCount === 0) {
-      setAccessMessage('No league access was found for this email yet. If you are joining an existing league, ask the league admin to invite this exact email address first.');
+      setAccessMessage('No invited league access was found for this email yet. You can still search for a self-serve league below, or ask the league admin to invite this exact email address.');
+    }
+  };
+
+  const handleJoinLeague = async (league: JoinableWorkspace) => {
+    setError('');
+    setAccessMessage('');
+    setJoinMessage('');
+    setJoiningWorkspaceId(league.id);
+
+    const result = await joinWorkspace(league.id);
+    setJoiningWorkspaceId(null);
+
+    if (!result.success) {
+      setJoinMessage(result.error || 'Failed to join this league.');
     }
   };
 
@@ -65,7 +105,7 @@ export function WorkspaceOnboarding() {
             <div className="brand-kicker mb-3">League Access</div>
             <h1 className="text-2xl font-black text-slate-950">No League Access Found Yet</h1>
             <p className="text-slate-500 mt-2 max-w-md">
-              {user?.email ? `Signed in as ${user.email}.` : 'You are signed in.'} If you are joining an existing league, the admin needs to invite this email address. If you are setting up a brand new club, you can create a workspace below.
+              {user?.email ? `Signed in as ${user.email}.` : 'You are signed in.'} If you are joining an existing league, either search for it below or ask the admin to invite this email address. If you are setting up a brand new club, you can create a workspace below.
             </p>
           </div>
 
@@ -75,8 +115,46 @@ export function WorkspaceOnboarding() {
                 <Users className="w-4 h-4 text-primary" />
                 Joining an existing league
               </div>
-              <div>Ask the league admin to invite this exact email address from the admin users page.</div>
-              <div>Once they do, tap the button below and your league access will be picked up automatically.</div>
+              <div>Choose the league you want to join below, or ask the league admin to invite this exact email address from the admin users page.</div>
+              <div>Invites still work as before, but they are no longer the only way in.</div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Find Your League</label>
+                <input
+                  type="text"
+                  value={leagueSearch}
+                  onChange={(event) => setLeagueSearch(event.target.value)}
+                  placeholder="Search by league name, identifier, or league number"
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl mt-1 focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-medium"
+                />
+              </div>
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {loadingJoinableLeagues ? (
+                  <div className="text-sm text-slate-500">Loading leagues...</div>
+                ) : joinableLeagues.length > 0 ? (
+                  joinableLeagues.map((league) => (
+                    <div key={league.id} className="rounded-xl border border-slate-200 bg-white p-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-800 truncate">{league.name}</div>
+                        <div className="text-xs text-slate-500">
+                          Identifier: <span className="font-semibold text-slate-700">{league.slug}</span> | League #{league.leagueNumber}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleJoinLeague(league)}
+                        disabled={joiningWorkspaceId === league.id}
+                        className="shrink-0 bg-accent text-black px-3 py-2 rounded-lg font-black hover:bg-[#f4dc00] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {joiningWorkspaceId === league.id ? 'Joining...' : 'Join'}
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-slate-500">
+                    No joinable leagues matched that search yet.
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleRefreshAccess}
@@ -89,6 +167,11 @@ export function WorkspaceOnboarding() {
               {accessMessage && (
                 <div className="p-3 bg-amber-50 text-amber-700 text-sm rounded-xl font-medium">
                   {accessMessage}
+                </div>
+              )}
+              {joinMessage && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium">
+                  {joinMessage}
                 </div>
               )}
             </div>
