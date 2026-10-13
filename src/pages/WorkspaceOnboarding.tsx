@@ -76,7 +76,7 @@ export function WorkspaceOnboarding() {
     setCheckingAccess(false);
 
     if (workspaceCount === 0) {
-      setAccessMessage('No invited league access was found for this email yet. You can still search for a self-serve league below, or ask the league admin to invite this exact email address.');
+      setAccessMessage('No league access was found for this account yet. You can still search for a self-serve league below, or ask the league admin to invite this exact email address.');
     }
   };
 
@@ -162,7 +162,7 @@ export function WorkspaceOnboarding() {
                 className="w-full bg-primary text-white py-3 rounded-xl font-black hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${checkingAccess ? 'animate-spin' : ''}`} />
-                {checkingAccess ? 'Checking League Access...' : 'I Have Been Invited'}
+                {checkingAccess ? 'Checking League Access...' : 'Refresh League Access'}
               </button>
               {accessMessage && (
                 <div className="p-3 bg-amber-50 text-amber-700 text-sm rounded-xl font-medium">
