@@ -77,9 +77,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               slug: item.workspace.slug,
               leagueNumber: item.workspace.league_number || undefined,
               selfJoinEnabled: item.workspace.self_join_enabled ?? undefined,
-              billingStatus: item.workspace.billing_status,
-              billingPlan: item.workspace.billing_plan,
-              isBillingExempt: item.workspace.is_billing_exempt,
+              billingStatus: item.workspace.billing_status || 'billable_active',
+              billingPlan: item.workspace.billing_plan || 'monthly',
+              isBillingExempt: !!item.workspace.is_billing_exempt,
               billingExemptReason: item.workspace.billing_exempt_reason,
               gracePeriodEndsAt: item.workspace.grace_period_ends_at,
               billingPendingStartedAt: item.workspace.billing_pending_started_at,
@@ -158,27 +158,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       )
     `;
 
-    const primaryResult = await supabase
-      .from('workspace_memberships')
-      .select(workspaceSelect)
-      .eq('user_id', userId);
+    const foundationalWorkspaceSelect = `
+      id,
+      workspace_id,
+      user_id,
+      role,
+      player_id,
+      workspace:workspaces (
+        id,
+        name,
+        slug,
+        billing_status,
+        billing_plan,
+        is_billing_exempt,
+        billing_exempt_reason,
+        paypal_subscription_id,
+        grace_period_ends_at,
+        owner_user_id,
+        created_at,
+        updated_at
+      )
+    `;
 
-    let data: any[] | null = primaryResult.data as any[] | null;
-    let error: any = primaryResult.error;
+    const workspaceQueryAttempts = [
+      { label: 'full workspace access query', select: workspaceSelect },
+      { label: 'legacy self-serve workspace access query', select: legacyWorkspaceSelect },
+      { label: 'foundational workspace access query', select: foundationalWorkspaceSelect },
+    ];
 
-    const missingSelfServeColumns =
-      error?.message?.includes('league_number') ||
-      error?.message?.includes('self_join_enabled');
+    let data: any[] | null = null;
+    let error: any = null;
 
-    if (missingSelfServeColumns) {
-      console.warn('Workspace self-serve join columns are not available yet, falling back to legacy workspace access query.');
-      const legacyResult = await supabase
+    for (const attempt of workspaceQueryAttempts) {
+      const result = await supabase
         .from('workspace_memberships')
-        .select(legacyWorkspaceSelect)
+        .select(attempt.select)
         .eq('user_id', userId);
 
-      data = legacyResult.data as any[] | null;
-      error = legacyResult.error;
+      if (!result.error) {
+        data = result.data as any[] | null;
+        error = null;
+        break;
+      }
+
+      error = result.error;
+      console.warn(`${attempt.label} failed:`, result.error.message);
     }
 
     if (error) {
