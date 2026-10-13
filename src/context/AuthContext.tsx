@@ -33,6 +33,7 @@ interface AuthContextType {
   updateUserProfile: (id: string, updates: { role?: AppUser['role'], playerId?: string | null }) => Promise<void>;
   resetPassword: (email: string) => Promise<boolean>;
   refreshUsers: () => Promise<number>;
+  refreshWorkspaceAccess: () => Promise<number>;
   checkUserDbValue: (id: string) => Promise<any>;
   setViewerPreview: (enabled: boolean) => void;
   setActiveWorkspaceId: (workspaceId: string | null) => void;
@@ -148,6 +149,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshWorkspaceAccess = async () => {
+    if (!user || !supabase) {
+      setWorkspaces([]);
+      setActiveWorkspaceId(null);
+      return 0;
+    }
+
+    await ensureInvitedWorkspaceMembership();
+    const entries = await loadWorkspaceAccess(user.id);
+    return entries.length;
+  };
+
   // Define fetchUsers outside useEffect so it can be exposed
   const fetchUsers = async () => {
     if (!supabase) return 0;
@@ -258,11 +271,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               // Insert into database
               const client = supabase;
               if (client) {
-                  client.from('profiles').insert([newUser]).then(({ error }) => {
-                    if (error) console.error('Error auto-creating profile:', error);
-                  });
+                  const { error: insertError } = await client.from('profiles').upsert([newUser], { onConflict: 'id' });
+                  if (insertError) console.error('Error auto-creating profile:', insertError);
               }
 
+              await ensureInvitedWorkspaceMembership();
+              await loadWorkspaceAccess(session.user.id);
               setUser({
                 ...newUser,
                 name: session.user.email?.split('@')[0] || 'User',
@@ -310,11 +324,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                  // Insert into database
                  const client = supabase;
                  if (client) {
-                     client.from('profiles').insert([newUser]).then(({ error }) => {
-                       if (error) console.error('Error auto-creating profile:', error);
-                     });
+                     const { error: insertError } = await client.from('profiles').upsert([newUser], { onConflict: 'id' });
+                     if (insertError) console.error('Error auto-creating profile:', insertError);
                  }
 
+                 await ensureInvitedWorkspaceMembership();
+                 await loadWorkspaceAccess(session.user.id);
                  setUser({
                    ...newUser,
                    name: session.user.email?.split('@')[0] || 'User',
@@ -556,16 +571,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user) {
-        // Create profile
+        // Ensure the profile exists for both direct sign-up and invited users.
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert([
+          .upsert([
             { id: data.user.id, email: data.user.email, role: 'viewer' }
-          ]);
+          ], { onConflict: 'id' });
         
         if (profileError) {
              console.error('Error creating profile:', profileError);
              // If profile creation fails, we might want to clean up auth user, but for now just report error
+        }
+
+        if (data.session) {
+          await ensureInvitedWorkspaceMembership();
+          await loadWorkspaceAccess(data.user.id);
         }
         
         return {
@@ -837,7 +857,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, actualIsAdmin, viewerPreview, users, workspaces, activeWorkspace, workspaceRole, platformRole, hasWorkspaceAdminAccess, createWorkspace, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, checkUserDbValue, setViewerPreview, setActiveWorkspaceId, buildPath, loading }}>
+    <AuthContext.Provider value={{ user, isAdmin, actualIsAdmin, viewerPreview, users, workspaces, activeWorkspace, workspaceRole, platformRole, hasWorkspaceAdminAccess, createWorkspace, login, signup, loginWithMagicLink, logout, inviteUser, deleteUser, updateUserStatus, updateUserProfile, resetPassword, refreshUsers: fetchUsers, refreshWorkspaceAccess, checkUserDbValue, setViewerPreview, setActiveWorkspaceId, buildPath, loading }}>
       {children}
     </AuthContext.Provider>
   );
